@@ -40,7 +40,8 @@ canvas:focus-visible, button:focus-visible { outline: 3px solid var(--gold); }
 .hud button { pointer-events: auto; cursor: pointer; }
 .stats { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-left: auto; }
 .hud #gold { margin-left: auto; background: var(--gold); }
-#gold:not([hidden]) + .stats { margin-left: 0; }
+#shopBtn:not([hidden]) + .stats { margin-left: 0; }
+@media (max-width: 600px) { .wide { display: none; } }
 .stats span { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stats b { font-weight: 700; margin-left: 5px; }
 
@@ -93,6 +94,13 @@ canvas:focus-visible, button:focus-visible { outline: 3px solid var(--gold); }
 .result li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-weight: 500; border-top: 1px solid rgba(35, 40, 31, .25); }
 .result li.done { font-weight: 700; }
 #rGoal:empty { display: none; }
+.result > div { max-height: 100%; overflow-y: auto; box-sizing: border-box; }
+.result li { align-items: center; }
+.result li.head { font-size: 14px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; border-top: 2px solid var(--ink); }
+.result li i { display: inline-block; width: 22px; height: 14px; margin-right: 8px; vertical-align: -2px; border: 1.5px solid var(--ink); border-radius: 2px; }
+.result button.mini { font-size: 14px; padding: 6px 9px; }
+.result button:disabled { opacity: .5; cursor: default; }
+#rCoins { font-weight: 700; }
 </style>
 
 <div class="stage" id="stage">
@@ -100,6 +108,7 @@ canvas:focus-visible, button:focus-visible { outline: 3px solid var(--gold); }
   <div class="hud">
     <button id="back" type="button" hidden>&larr; Range</button>
     <button id="gold" type="button">Golden Arrow</button>
+    <button id="shopBtn" type="button">Shop</button>
     <div class="stats" id="stats"></div>
   </div>
   <div class="banner">
@@ -107,6 +116,18 @@ canvas:focus-visible, button:focus-visible { outline: 3px solid var(--gold); }
     <p id="sub"></p>
   </div>
   <div id="signs"></div>
+  <div class="result" id="shop" hidden>
+    <div>
+      <h2>Shop</h2>
+      <p id="purse"></p>
+      <nav>
+        <button id="tabShop" type="button">Shop</button>
+        <button id="tabGear" type="button">My gear</button>
+      </nav>
+      <ul id="items"></ul>
+      <nav><button id="shopClose" type="button">Close</button></nav>
+    </div>
+  </div>
   <div class="result" id="trophy" hidden>
     <div>
       <h2>Golden Arrow</h2>
@@ -121,6 +142,7 @@ canvas:focus-visible, button:focus-visible { outline: 3px solid var(--gold); }
       <strong id="rScore"></strong>
       <p id="rNote"></p>
       <p id="rBest"></p>
+      <p id="rCoins"></p>
       <p id="rGoal"></p>
       <nav>
         <button class="go" id="again" type="button">Shoot again</button>
@@ -149,26 +171,94 @@ let arrows = [], stuck = [], pops = [], parts = [], timers = [];
 const ptr = { x: 0, y: 0, down: false, t0: 0, touch: false, seen: false };
 
 /* ---------- Golden Arrow: earned by reaching a goal in every round ---------- */
-const GOALS = [   // [best-score key, round, score to reach]
+const GOALS = [   // [best-score key, round, score to reach, true when fewer is better]
   ['rush', 'Classic', 30], ['bullseye30', 'Bullseyes, 30 sec', 3], ['bullseye60', 'Bullseyes, 60 sec', 6],
-  ['apple', 'Apple', 2], ['balloons', 'Balloons, 30 sec', 12]];
+  ['apple', 'One apple', 2], ['applerow12', 'Apple row', 24, true], ['balloons', 'Balloons, 30 sec', 12]];
 const mem = {};   // keeps bests for this visit when browser storage is unavailable
 let golden = false;
 function bestOf(key) {
   try { return Math.max(mem[key] || 0, +localStorage.getItem('nl-best-' + key) || 0); } catch (e) { return mem[key] || 0; }
 }
 function saveBest(key, v) { mem[key] = v; try { localStorage.setItem('nl-best-' + key, v); } catch (e) {} }
+function met(g) { const b = bestOf(g[0]); return g[3] ? b > 0 && b <= g[2] : b >= g[2]; }
 function refreshGold() {
-  const done = GOALS.filter(g => bestOf(g[0]) >= g[2]).length;
+  const done = GOALS.filter(met).length;
   golden = done === GOALS.length;
-  $('gold').textContent = golden ? 'Golden Arrow earned' : 'Golden Arrow ' + done + '/' + GOALS.length;
-  $('goalState').textContent = golden ? 'Earned. Every arrow you shoot is now gold.'
-    : 'Reach all five goals to earn the Golden Arrow. Your arrows turn gold for good.';
+  $('gold').innerHTML = '<span class="wide">Golden Arrow </span>★ ' + (golden ? 'earned' : done + '/' + GOALS.length);
+  $('goalState').textContent = golden ? 'Earned. The Golden Arrow is yours to equip in My gear.'
+    : 'Reach all ' + GOALS.length + ' goals to earn the Golden Arrow, a gold arrow no coins can buy.';
   $('goals').innerHTML = GOALS.map(g => {
-    const b = bestOf(g[0]), ok = b >= g[2];
-    return '<li' + (ok ? ' class="done"' : '') + '><span>' + (ok ? '\u2713 ' : '') + g[1] + '</span><span>' + b + ' / ' + g[2] + '</span></li>';
+    const b = bestOf(g[0]), ok = met(g);
+    return '<li' + (ok ? ' class="done"' : '') + '><span>' + (ok ? '✓ ' : '') + g[1] + '</span><span>' +
+      (b || '–') + ' / ' + g[2] + (g[3] ? ' or fewer' : '') + '</span></li>';
   }).join('');
 }
+
+/* ---------- coins, shop and gear ---------- */
+const SHOP = {
+  arrow: [   // a: shaft, b: feathers
+    { id: 'wood', name: 'Classic', a: C['wood-dark'], b: C.red, price: 0 },
+    { id: 'blue', name: 'Blue feather', a: C['wood-dark'], b: C.blue, price: 15 },
+    { id: 'night', name: 'Midnight', a: C.black, b: C.white, price: 30 },
+    { id: 'lime', name: 'Lime', a: '#2e7d32', b: '#b6e04a', price: 30 },
+    { id: 'pink', name: 'Bubblegum', a: '#c2378a', b: '#ffb3dd', price: 45 },
+    { id: 'golden', name: 'Golden Arrow', a: C.gold, b: C.white, earn: true }],
+  target: [  // a and b alternate in bands; the classic face has no a and keeps the five ring colors
+    { id: 'classic', name: 'Classic', price: 0 },
+    { id: 'red', name: 'Red and white', a: C.red, b: C.white, price: 20 },
+    { id: 'blue', name: 'Blue and white', a: C.blue, b: C.white, price: 20 },
+    { id: 'green', name: 'Green and white', a: '#2e8b46', b: C.white, price: 35 },
+    { id: 'purple', name: 'Purple and gold', a: '#6b3fa0', b: C.gold, price: 50 },
+    { id: 'night', name: 'Black and gold', a: C.black, b: C.gold, price: 60 }]
+};
+const save = { coins: 0, own: { arrow: ['wood'], target: ['classic'] }, eq: { arrow: 'wood', target: 'classic' } };
+try {
+  const old = JSON.parse(localStorage.getItem('nl-save') || 'null');
+  if (old) {
+    save.coins = Math.max(0, Math.floor(+old.coins) || 0);
+    ['arrow', 'target'].forEach(k => {
+      if (old.own && Array.isArray(old.own[k])) save.own[k] = old.own[k];
+      if (old.eq && old.eq[k]) save.eq[k] = old.eq[k];
+    });
+  }
+} catch (e) {}
+function store() { try { localStorage.setItem('nl-save', JSON.stringify(save)); } catch (e) {} }
+function owns(kind, it) { return it.earn ? golden : save.own[kind].includes(it.id); }
+function gear(kind) { return SHOP[kind].find(it => it.id === save.eq[kind] && owns(kind, it)) || SHOP[kind][0]; }
+
+let shopTab = 'shop';
+function refreshShop() {
+  $('shopBtn').innerHTML = 'Shop · ' + save.coins + '<span class="wide"> coins</span>';
+  $('purse').textContent = 'You have ' + save.coins + (save.coins === 1 ? ' coin' : ' coins') + '. Finish any round to earn more.';
+  $('tabShop').className = shopTab === 'shop' ? 'go' : '';
+  $('tabGear').className = shopTab === 'gear' ? 'go' : '';
+  let h = '';
+  [['arrow', 'Arrows'], ['target', 'Targets']].forEach(([kind, title]) => {
+    const rows = SHOP[kind].filter(it => owns(kind, it) === (shopTab === 'gear')).map(it => {
+      const data = ' data-kind="' + kind + '" data-id="' + it.id + '"';
+      let btn;
+      if (shopTab === 'gear') { const on = gear(kind) === it; btn = '<button class="mini" type="button"' + data + (on ? ' disabled' : '') + '>' + (on ? 'Equipped' : 'Equip') + '</button>'; }
+      else if (it.earn) btn = '<button class="mini" type="button" disabled>Earn it</button>';
+      else btn = '<button class="mini" type="button"' + data + (save.coins < it.price ? ' disabled' : '') + '>Buy · ' + it.price + '</button>';
+      return '<li><span><i style="background:linear-gradient(90deg,' + (it.a || C.gold) + ' 50%,' + (it.b || C.red) + ' 50%)"></i>' + it.name + '</span>' + btn + '</li>';
+    });
+    h += '<li class="head">' + title + '</li>' + (rows.join('') || '<li>' + (shopTab === 'gear' ? 'Nothing yet' : 'You own them all') + '</li>');
+  });
+  $('items').innerHTML = h;
+}
+$('items').onclick = e => {
+  const b = e.target.closest('button[data-id]');
+  if (!b) return;
+  const kind = b.dataset.kind, it = SHOP[kind].find(i => i.id === b.dataset.id);
+  if (owns(kind, it)) save.eq[kind] = it.id;
+  else if (save.coins >= it.price) { save.coins -= it.price; save.own[kind].push(it.id); }
+  else return;
+  store(); refreshShop();
+};
+$('shopBtn').onclick = () => { ptr.down = false; refreshShop(); $('shop').hidden = false; $('shopClose').focus(); };
+$('shopClose').onclick = () => { $('shop').hidden = true; $('shopBtn').focus(); };
+$('tabShop').onclick = () => { shopTab = 'shop'; refreshShop(); };
+$('tabGear').onclick = () => { shopTab = 'gear'; refreshShop(); };
 
 /* ---------- shooting ---------- */
 function aim() {
@@ -268,7 +358,7 @@ function Rush() {
     tg.y = HZ + drop() * s - tg.r * 1.35;
   }
   return {
-    name: 'Classic', key: 'rush', again: Rush, parent: mainMenu, backTo: 'Range', drawTime: 0.35,
+    name: 'Classic', key: 'rush', coin: s => Math.round(s / 3), again: Rush, parent: mainMenu, backTo: 'Range', drawTime: 0.35,
     sub: 'Hit the targets as they rush past. Let 5 get away and the run is over.',
     layout() { ts.forEach(place); },
     ready() { return !this.ended; },
@@ -323,8 +413,8 @@ function Bullseyes(secs) {
   const tg = { fx: 0.5, k: 1, x: 0, y: 0, r: 0 };
   let time = secs, hits = 0, moving = false;
   return {
-    name: 'Bullseyes', key: 'bullseye' + secs, again: () => Bullseyes(secs), parent: bullMenu, backTo: 'Bullseyes',
-    sub: secs + ' seconds. Only the gold counts.',
+    name: 'Bullseyes', key: 'bullseye' + secs, coin: s => s * 4, again: () => Bullseyes(secs), parent: bullMenu, backTo: 'Bullseyes',
+    sub: secs + ' seconds. Only the center counts.',
     layout() {
       tg.r = Math.min(W * 0.2, H * 0.2) * tg.k * 1.4;
       tg.x = Math.max(tg.r + 8, Math.min(W - tg.r - 8, tg.fx * W)); tg.y = HZ - tg.r * 0.7;
@@ -361,7 +451,7 @@ function Balloons(secs) {
   let time = secs, score = 0, spawn = 0.3;
   const bs = [];
   return {
-    name: 'Balloons', key: secs === 30 ? 'balloons' : 'balloons60', again: () => Balloons(secs), parent: balloonMenu, backTo: 'Balloons',
+    name: 'Balloons', key: secs === 30 ? 'balloons' : 'balloons60', coin: s => Math.round(s * 0.6), again: () => Balloons(secs), parent: balloonMenu, backTo: 'Balloons',
     sub: 'White 1, black 2, blue 3, red 4, gold 5.',
     layout() {},
     ready() { return !this.ended; },
@@ -400,7 +490,7 @@ function Apple() {
   let round = 0, misses = 0, lock = false;
   const appleR = () => Math.max(U * 0.012, U * 0.034 * Math.pow(0.88, round));
   return {
-    name: 'Apple', key: 'apple', again: Apple, parent: appleMenu, backTo: 'Apples',
+    name: 'Apple', key: 'apple', coin: s => s * 6, again: Apple, parent: appleMenu, backTo: 'Apples',
     sub: 'Hit the apple. Three misses and you are out.',
     enter() { wind = 0; },
     layout() { d.r = U * 0.05; d.x = d.fx * W; d.y = HZ - d.r * 4.7; },
@@ -445,15 +535,15 @@ function Apple() {
 
 // A row of apples on a rail: clear them all in as few arrows as you can.
 function AppleRow() {
-  const N = 8, apples = [];
+  const N = 12, apples = [];
   for (let i = 0; i < N; i++) apples.push({ x: 0, y: 0, r: 0, hit: false });
   let tries = 0, left = N;
   const rail = () => HZ - U * 0.12;
   return {
-    name: 'Apple row', key: 'applerow', lower: true, again: AppleRow, parent: appleMenu, backTo: 'Apples',
+    name: 'Apple row', key: 'applerow12', lower: true, coin: s => Math.max(3, 40 - s), again: AppleRow, parent: appleMenu, backTo: 'Apples',
     sub: N + ' apples in a row. Clear them in as few arrows as you can.',
     layout() {
-      apples.forEach((a, i) => { a.r = Math.min(U * 0.03, W * 0.04); a.x = W * (0.12 + 0.76 * i / (N - 1)); a.y = rail() - a.r; });
+      apples.forEach((a, i) => { a.r = Math.min(U * 0.03, W * 0.028); a.x = W * (0.12 + 0.76 * i / (N - 1)); a.y = rail() - a.r; });
     },
     ready() { return !this.ended; },
     update() {},
@@ -500,7 +590,7 @@ function go(s) {
   scene = s; arrows = []; stuck = []; pops = []; parts = []; timers = []; ptr.down = false; wind = 0;
   $('result').hidden = true;
   $('h1').hidden = !s.menu; $('h1').textContent = s.name; $('sub').textContent = s.sub;
-  $('back').hidden = !s.parent; $('gold').hidden = !s.menu; $('trophy').hidden = true;
+  $('back').hidden = !s.parent; $('gold').hidden = $('shopBtn').hidden = !s.menu; $('trophy').hidden = $('shop').hidden = true;
   $('back').textContent = '← ' + (s.backTo || 'Minigames');
   const box = $('signs'); box.textContent = '';
   (s.signs || []).forEach((label, i) => {
@@ -524,10 +614,15 @@ function finish(score, note) {
   after(0.9, () => {
     const was = golden, old = bestOf(s.key), fresh = s.lower ? !old || score < old : score > old, best = fresh ? score : old;
     if (fresh) saveBest(s.key, score);
+    const earned = s.coin ? s.coin(score) : 0;
+    save.coins += earned;
     refreshGold();
+    if (golden && !was) save.eq.arrow = 'golden';
+    store(); refreshShop();
     const goal = GOALS.find(g => g[0] === s.key);
-    $('rGoal').textContent = golden && !was ? 'Golden Arrow earned! Your arrows are now gold.'
-      : goal ? 'Golden Arrow goal: ' + goal[2] + (best >= goal[2] ? ' (reached)' : '') : '';
+    $('rCoins').textContent = '+' + earned + (earned === 1 ? ' coin' : ' coins');
+    $('rGoal').textContent = golden && !was ? 'Golden Arrow earned! It is equipped, and it lives in My gear.'
+      : goal ? 'Golden Arrow goal: ' + goal[2] + (goal[3] ? ' or fewer' : '') + (met(goal) ? ' (reached)' : '') : '';
     $('rName').textContent = s.name; $('rScore').textContent = score; $('rNote').textContent = note;
     $('rBest').textContent = fresh ? 'New personal best' : 'Personal best ' + best;
     $('result').hidden = false; $('again').focus();
@@ -595,9 +690,10 @@ function drawTarget(o, hanging) {
     ctx.moveTo(x + r * 0.45, y - r * 0.7); ctx.lineTo(x + r * 0.85, y + r * 1.35); ctx.stroke();
   }
   ctx.fillStyle = C.straw; ctx.beginPath(); ctx.arc(x, y, r * 1.09, 0, TAU); ctx.fill();
-  const tint = o.tint && C[o.tint];   // menu targets are painted in one color with white bands
+  // The home targets keep their red and blue; every other target wears the equipped face.
+  const face = o.tint ? { a: C[o.tint], b: C.white } : gear('target'), tint = face.a;
   RINGS.forEach((c, i) => {
-    ctx.fillStyle = tint ? (i % 4 < 2 ? tint : C.white) : c; ctx.beginPath(); ctx.arc(x, y, r * (1 - i / 10), 0, TAU); ctx.fill();
+    ctx.fillStyle = tint ? (i % 4 < 2 ? tint : face.b) : c; ctx.beginPath(); ctx.arc(x, y, r * (1 - i / 10), 0, TAU); ctx.fill();
     ctx.strokeStyle = !tint && (i === 3 || i === 2) ? 'rgba(247,245,238,.5)' : 'rgba(34,38,43,.35)'; ctx.lineWidth = 1; ctx.stroke();
   });
   ctx.strokeStyle = 'rgba(34,38,43,.5)'; ctx.beginPath(); ctx.arc(x, y, r * 0.05, 0, TAU); ctx.stroke();
@@ -621,9 +717,9 @@ function drawBalloon(b) {
   ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.beginPath(); ctx.ellipse(b.x - b.r * 0.35, b.y - b.r * 0.45, b.r * 0.18, b.r * 0.3, 0.5, 0, TAU); ctx.fill();
 }
 function shaft(x1, y1, x2, y2, w) {   // tip at 1, fletching at 2
-  ctx.lineCap = 'round'; ctx.strokeStyle = golden ? C.gold : C['wood-dark']; ctx.lineWidth = w;
+  ctx.lineCap = 'round'; ctx.strokeStyle = gear('arrow').a; ctx.lineWidth = w;
   ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-  ctx.strokeStyle = golden ? C.white : C.red; ctx.lineWidth = w * 2.4;
+  ctx.strokeStyle = gear('arrow').b; ctx.lineWidth = w * 2.4;
   ctx.beginPath(); ctx.moveTo(x1 + (x2 - x1) * 0.72, y1 + (y2 - y1) * 0.72); ctx.lineTo(x2, y2); ctx.stroke();
 }
 function drawStuck(s) {
@@ -709,6 +805,7 @@ let last = performance.now();
 new ResizeObserver(resize).observe(stage);
 go(mainMenu());
 refreshGold();
+refreshShop();
 resize();
 requestAnimationFrame(frame);
 })();
