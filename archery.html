@@ -198,12 +198,23 @@ function refreshGold() {
 
 /* ---------- coins, shop and gear ---------- */
 const SHOP = {
-  arrow: [   // a: shaft, b: feathers
+  bow: [     // a: limbs, b: grip and trim, s: string
+    { id: 'wood', name: 'Longbow', a: C.wood, b: C['wood-dark'], price: 0 },
+    { id: 'recurve', name: 'Red recurve', a: C.red, b: C.black, curl: true, price: 120 },
+    { id: 'candy', name: 'Candy cane bow', a: C.white, b: C.red, dash: true, price: 150 },
+    { id: 'frost', name: 'Frost bow', a: '#9fdcf5', b: C.white, s: '#dff4ff', price: 180 },
+    { id: 'neon', name: 'Neon bow', a: '#b6ff3c', b: '#ff4fd8', glow: true, price: 220 },
+    { id: 'dragon', name: 'Dragon bow', a: '#1f6b45', b: C.gold, spikes: true, price: 300 }],
+  arrow: [   // a: shaft, b: feathers, fx: special effect
     { id: 'wood', name: 'Classic', a: C['wood-dark'], b: C.red, price: 0 },
     { id: 'blue', name: 'Blue feather', a: C['wood-dark'], b: C.blue, price: 50 },
     { id: 'night', name: 'Midnight', a: C.black, b: C.white, price: 100 },
     { id: 'lime', name: 'Lime', a: '#2e7d32', b: '#b6e04a', price: 100 },
     { id: 'pink', name: 'Bubblegum', a: '#c2378a', b: '#ffb3dd', price: 150 },
+    { id: 'plunger', name: 'Plunger arrow', a: C['wood-dark'], b: C.red, fx: 'plunger', price: 120 },
+    { id: 'fire', name: 'Flame arrow', a: '#e8452c', b: '#ffd23f', fx: 'fire', price: 200 },
+    { id: 'frost', name: 'Frost arrow', a: '#7cc7f2', b: C.white, fx: 'frost', price: 200 },
+    { id: 'rainbow', name: 'Rainbow arrow', a: '#8a4fd0', b: '#ffd23f', fx: 'rainbow', price: 300 },
     { id: 'golden', name: 'Golden Arrow', a: C.gold, b: C.white, earn: true }],
   target: [  // a and b alternate in bands; the classic face has no a and keeps the five ring colors
     { id: 'classic', name: 'Classic', price: 0 },
@@ -213,12 +224,15 @@ const SHOP = {
     { id: 'purple', name: 'Purple and gold', a: '#6b3fa0', b: C.gold, price: 175 },
     { id: 'night', name: 'Black and gold', a: C.black, b: C.gold, price: 250 }]
 };
-const save = { coins: 0, own: { arrow: ['wood'], target: ['classic'] }, eq: { arrow: 'wood', target: 'classic' } };
+const TRAIL = {   // sparks left behind by special arrows in flight
+  fire: ['#e8452c', '#ff8a1f', '#ffd23f'], frost: ['#7cc7f2', '#bfe9ff', '#ffffff'],
+  rainbow: ['#e8452c', '#ffd23f', '#4cc24a', '#2f7fc2', '#8a4fd0'] };
+const save = { coins: 0, own: { bow: ['wood'], arrow: ['wood'], target: ['classic'] }, eq: { bow: 'wood', arrow: 'wood', target: 'classic' } };
 try {
   const old = JSON.parse(localStorage.getItem('nl-save') || 'null');
   if (old) {
     save.coins = Math.max(0, Math.floor(+old.coins) || 0);
-    ['arrow', 'target'].forEach(k => {
+    ['bow', 'arrow', 'target'].forEach(k => {
       if (old.own && Array.isArray(old.own[k])) save.own[k] = old.own[k];
       if (old.eq && old.eq[k]) save.eq[k] = old.eq[k];
     });
@@ -235,7 +249,7 @@ function refreshShop() {
   $('tabShop').className = shopTab === 'shop' ? 'go' : '';
   $('tabGear').className = shopTab === 'gear' ? 'go' : '';
   let h = '';
-  [['arrow', 'Arrows'], ['target', 'Targets']].forEach(([kind, title]) => {
+  [['bow', 'Bows'], ['arrow', 'Arrows'], ['target', 'Targets']].forEach(([kind, title]) => {
     const rows = SHOP[kind].filter(it => owns(kind, it) === (shopTab === 'gear')).map(it => {
       const data = ' data-kind="' + kind + '" data-id="' + it.id + '"';
       let btn;
@@ -853,9 +867,11 @@ function drawBalloon(b) {
   ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.beginPath(); ctx.ellipse(b.x - b.r * 0.35, b.y - b.r * 0.45, b.r * 0.18, b.r * 0.3, 0.5, 0, TAU); ctx.fill();
 }
 function shaft(x1, y1, x2, y2, w) {   // tip at 1, fletching at 2
-  ctx.lineCap = 'round'; ctx.strokeStyle = gear('arrow').a; ctx.lineWidth = w;
+  const g = gear('arrow');
+  if (g.fx === 'plunger') { ctx.fillStyle = g.b; ctx.beginPath(); ctx.arc(x1, y1, w * 2.2, 0, TAU); ctx.fill(); }   // rubber cup
+  ctx.lineCap = 'round'; ctx.strokeStyle = g.fx === 'rainbow' ? 'hsl(' + Math.round(t * 300 % 360) + ',90%,55%)' : g.a; ctx.lineWidth = w;
   ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-  ctx.strokeStyle = gear('arrow').b; ctx.lineWidth = w * 2.4;
+  ctx.strokeStyle = g.b; ctx.lineWidth = w * 2.4;
   ctx.beginPath(); ctx.moveTo(x1 + (x2 - x1) * 0.72, y1 + (y2 - y1) * 0.72); ctx.lineTo(x2, y2); ctx.stroke();
 }
 function drawStuck(s) {
@@ -875,14 +891,42 @@ function drawFlight(a) {
   const x = a.x0 + (a.x - a.x0) * e, y = a.y0 + (a.y - a.y0) * e - Math.sin(Math.PI * k) * U * 0.05;
   const len = U * 0.2 * (1 - k * 0.85), dx = a.x0 - a.x, dy = a.y0 - a.y, m = Math.hypot(dx, dy) || 1;
   shaft(x, y, x + dx / m * len, y + dy / m * len, Math.max(1.5, 5 * (1 - k * 0.7)));
+  const fx = TRAIL[gear('arrow').fx];
+  if (fx) parts.push({ x, y, vx: (rand() - 0.5) * U * 0.12, vy: (rand() - 0.5) * U * 0.12, t: 0, c: fx[Math.floor(rand() * fx.length)] });
+}
+function drawBow(a) {   // the equipped bow, held flat at the shooting line; it bends as you draw
+  const b = gear('bow'), p = ptr.down ? a.p : 0, cx = W / 2, gy = H - U * 0.13;
+  const hs = U * 0.21 * (1 - 0.1 * p), ty = gy + U * (0.07 + 0.02 * p), ny = ty + p * U * 0.07, top = gy - U * 0.09;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = b.s || C.white; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(cx - hs, ty); ctx.lineTo(cx, ny); ctx.lineTo(cx + hs, ty); ctx.stroke();
+  if (b.glow) { ctx.shadowColor = b.a; ctx.shadowBlur = 16; }
+  const limbs = () => {
+    ctx.beginPath(); ctx.moveTo(cx - hs, ty); ctx.quadraticCurveTo(cx, top, cx + hs, ty);
+    if (b.curl) { ctx.moveTo(cx - hs, ty); ctx.lineTo(cx - hs - U * 0.03, ty - U * 0.035); ctx.moveTo(cx + hs, ty); ctx.lineTo(cx + hs + U * 0.03, ty - U * 0.035); }
+  };
+  ctx.strokeStyle = b.a; ctx.lineWidth = Math.max(5, U * 0.016); limbs(); ctx.stroke();
+  if (b.dash) { ctx.setLineDash([U * 0.022, U * 0.03]); ctx.strokeStyle = b.b; limbs(); ctx.stroke(); ctx.setLineDash([]); }
+  ctx.shadowBlur = 0;
+  if (b.spikes) {
+    ctx.fillStyle = b.b;
+    [-0.7, -0.45, 0.45, 0.7].forEach(k => {
+      const q = (k + 1) / 2, x = cx + k * hs, y = (1 - q) * (1 - q) * ty + 2 * q * (1 - q) * top + q * q * ty, z = U * 0.02;
+      ctx.beginPath(); ctx.moveTo(x - z * 0.6, y); ctx.lineTo(x, y - z * 1.5); ctx.lineTo(x + z * 0.6, y); ctx.fill();
+    });
+  }
+  const mid = (ty + top) / 2;
+  ctx.strokeStyle = b.b; ctx.lineWidth = Math.max(7, U * 0.024);
+  ctx.beginPath(); ctx.moveTo(cx - U * 0.028, mid + 1); ctx.lineTo(cx + U * 0.028, mid + 1); ctx.stroke();
+  if (ptr.down) {   // nocked arrow
+    const dx = a.x - cx, dy = a.y - ny, m = Math.hypot(dx, dy) || 1, len = U * 0.24;
+    shaft(cx + dx / m * len, ny + dy / m * len, cx, ny, 5);
+  }
 }
 function drawAim() {
   if (!ptr.seen || !scene.ready()) return;
   const a = aim();
-  if (ptr.down) {   // nocked arrow at the shooting line
-    const dx = a.x - W / 2, dy = a.y - H, m = Math.hypot(dx, dy) || 1, len = U * 0.2 * (1 - 0.55 * a.p);
-    shaft(W / 2 + dx / m * len, H + dy / m * len, W / 2, H + 4, 5);
-  }
+  drawBow(a);
   ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.lineCap = 'butt';
   ctx.beginPath(); ctx.arc(a.x, a.y, 9, 0, TAU);
   for (let i = 0; i < 4; i++) { const q = i * Math.PI / 2; ctx.moveTo(a.x + Math.cos(q) * 5, a.y + Math.sin(q) * 5); ctx.lineTo(a.x + Math.cos(q) * 14, a.y + Math.sin(q) * 14); }
