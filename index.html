@@ -158,8 +158,8 @@ const ptr = { x: 0, y: 0, down: false, t0: 0, touch: false, seen: false };
 
 /* ---------- Golden Arrow: earned by reaching a goal in every round ---------- */
 const GOALS = [   // [best-score key, round, score to reach]
-  ['rush', 'Classic', 60], ['bullseye30', 'Bullseyes, 30 sec', 6], ['bullseye60', 'Bullseyes, 60 sec', 12],
-  ['apple', 'Apple', 4], ['balloons', 'Balloons', 25]];
+  ['rush', 'Classic', 30], ['bullseye30', 'Bullseyes, 30 sec', 3], ['bullseye60', 'Bullseyes, 60 sec', 6],
+  ['apple', 'Apple', 2], ['balloons', 'Balloons', 12]];
 const mem = {};   // keeps bests for this visit when browser storage is unavailable
 let golden = false;
 function bestOf(key) {
