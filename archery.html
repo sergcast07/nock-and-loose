@@ -1,0 +1,661 @@
+<title>Nock & Loose</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: one full-height range seen from the shooting line. Painted wooden signs,
+   the HUD and the result card float over a single canvas. Single daylight look by choice. */
+:root {
+  --sky: #a9dbe6; --sky-low: #e9f4dc;
+  --grass: #6fae4e; --grass-dark: #63a045; --tree: #2f5d3a;
+  --gold: #f6cf2b; --red: #d8362b; --blue: #2f7fc2; --black: #22262b; --white: #f7f5ee;
+  --straw: #d9b566; --wood: #8a5a33; --wood-dark: #5a371d;
+  --paper: #fbf7ea; --ink: #23281f; --page: #1c3325;
+  --display: "Alfa Slab One", Rockwell, "Roboto Slab", Georgia, serif;
+  --ui: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body {
+  box-sizing: border-box; background: var(--page); color: var(--ink);
+  font-family: var(--ui); font-size: 17px;
+  padding-inline: 16px; padding-block: 12px;
+  display: flex; justify-content: center;
+}
+.stage {
+  position: relative; width: 100%; max-width: 1100px; height: 100%; min-height: 380px;
+  border-radius: 10px; overflow: hidden; background: var(--sky);
+  user-select: none; -webkit-user-select: none;
+}
+canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; outline-offset: -4px; }
+canvas:focus-visible, button:focus-visible { outline: 3px solid var(--gold); }
+
+.hud {
+  position: absolute; inset: 0 0 auto 0; display: flex; justify-content: space-between;
+  align-items: flex-start; gap: 8px; padding: 10px 12px; pointer-events: none;
+}
+.hud button, .stats span {
+  font: 600 16px/1 var(--ui); letter-spacing: .04em; text-transform: uppercase;
+  background: var(--paper); color: var(--ink); border: 2px solid var(--ink);
+  border-radius: 4px; padding: 7px 10px;
+}
+.hud button { pointer-events: auto; cursor: pointer; }
+.stats { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-left: auto; }
+.hud #gold { margin-left: auto; background: var(--gold); }
+#gold:not([hidden]) + .stats { margin-left: 0; }
+.stats span { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stats b { font-weight: 700; margin-left: 5px; }
+
+.banner {
+  position: absolute; inset: 44px 0 auto 0; text-align: center; pointer-events: none;
+  padding-inline: 12px;
+}
+.banner h1 {
+  margin: 0; font: 400 clamp(26px, min(5.5vw, 8vh), 50px)/1.05 var(--display);
+  color: var(--white); text-wrap: balance;
+  text-shadow: 0 3px 0 var(--wood-dark), 0 6px 14px rgba(34, 38, 43, .25);
+}
+.banner p {
+  margin: 6px auto 0; display: inline-block; font: 600 16px/1.2 var(--ui);
+  letter-spacing: .05em; text-transform: uppercase; color: var(--ink);
+  background: rgba(251, 247, 234, .82); padding: 4px 10px; border-radius: 3px;
+}
+
+.sign {
+  position: absolute; transform: translate(-50%, -100%) rotate(var(--tilt, -2deg));
+  font: 400 clamp(13px, 3.4vw, 24px)/1 var(--display); letter-spacing: .03em; text-transform: uppercase;
+  color: var(--white); background: var(--wood); border: 0;
+  border-bottom: 5px solid var(--wood-dark); border-radius: 4px;
+  padding: .55em .7em .45em; cursor: pointer; white-space: nowrap;
+  box-shadow: 0 4px 0 rgba(34, 38, 43, .18);
+}
+.sign:nth-child(even) { --tilt: 2deg; }
+.sign:hover { background: var(--wood-dark); }
+
+.result {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 16px;
+  background: rgba(28, 51, 37, .45);
+}
+.result div {
+  background: var(--paper); border: 3px solid var(--ink); border-radius: 6px;
+  padding: 22px 26px; text-align: center; max-width: 320px; width: 100%;
+  display: flex; flex-direction: column; gap: 8px; align-items: center;
+}
+.result h2 { margin: 0; font: 600 16px/1 var(--ui); letter-spacing: .1em; text-transform: uppercase; }
+.result strong { font: 400 72px/1 var(--display); color: var(--red); font-variant-numeric: tabular-nums; }
+.result p { margin: 0; font-weight: 500; }
+.result nav { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+.result button {
+  font: 600 17px/1 var(--ui); letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
+  padding: 10px 14px; border-radius: 4px; border: 2px solid var(--ink);
+  background: var(--paper); color: var(--ink);
+}
+.result button.go { background: var(--gold); }
+.result ul { list-style: none; margin: 4px 0; padding: 0; width: 100%; font-variant-numeric: tabular-nums; }
+.result li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-weight: 500; border-top: 1px solid rgba(35, 40, 31, .25); }
+.result li.done { font-weight: 700; }
+#rGoal:empty { display: none; }
+</style>
+
+<div class="stage" id="stage">
+  <canvas id="cv" tabindex="0" aria-label="Archery range. Press and hold to draw the bow, release to loose. With a keyboard, aim with the arrow keys and hold Space."></canvas>
+  <div class="hud">
+    <button id="back" type="button" hidden>&larr; Range</button>
+    <button id="gold" type="button">Golden Arrow</button>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="banner">
+    <h1 id="h1">Nock &amp; Loose</h1>
+    <p id="sub"></p>
+  </div>
+  <div id="signs"></div>
+  <div class="result" id="trophy" hidden>
+    <div>
+      <h2>Golden Arrow</h2>
+      <p id="goalState"></p>
+      <ul id="goals"></ul>
+      <nav><button id="trophyClose" type="button">Close</button></nav>
+    </div>
+  </div>
+  <div class="result" id="result" hidden>
+    <div>
+      <h2 id="rName"></h2>
+      <strong id="rScore"></strong>
+      <p id="rNote"></p>
+      <p id="rBest"></p>
+      <p id="rGoal"></p>
+      <nav>
+        <button class="go" id="again" type="button">Shoot again</button>
+        <button id="home" type="button">Back to range</button>
+      </nav>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d'), stage = $('stage');
+const css = getComputedStyle(document.documentElement);
+const C = {};
+['sky','sky-low','grass','grass-dark','tree','gold','red','blue','black','white','straw','wood','wood-dark','paper','ink']
+  .forEach(k => C[k] = css.getPropertyValue('--' + k).trim());
+const DISPLAY = css.getPropertyValue('--display'), UI = css.getPropertyValue('--ui');
+const RINGS = [C.white, C.white, C.black, C.black, C.blue, C.blue, C.red, C.red, C.gold, C.gold];
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand = Math.random, TAU = Math.PI * 2;
+
+let W = 0, H = 0, U = 0, HZ = 0;          // stage size, short side, horizon
+let scene = null, t = 0, wind = 0;
+let arrows = [], stuck = [], pops = [], parts = [], timers = [];
+const ptr = { x: 0, y: 0, down: false, t0: 0, touch: false, seen: false };
+
+/* ---------- Golden Arrow: earned by reaching a goal in every round ---------- */
+const GOALS = [   // [best-score key, round, score to reach]
+  ['rush', 'Classic', 60], ['bullseye30', 'Bullseyes, 30 sec', 6], ['bullseye60', 'Bullseyes, 60 sec', 12],
+  ['apple', 'Apple', 4], ['balloons', 'Balloons', 25]];
+const mem = {};   // keeps bests for this visit when browser storage is unavailable
+let golden = false;
+function bestOf(key) {
+  try { return Math.max(mem[key] || 0, +localStorage.getItem('nl-best-' + key) || 0); } catch (e) { return mem[key] || 0; }
+}
+function saveBest(key, v) { mem[key] = v; try { localStorage.setItem('nl-best-' + key, v); } catch (e) {} }
+function refreshGold() {
+  const done = GOALS.filter(g => bestOf(g[0]) >= g[2]).length;
+  golden = done === GOALS.length;
+  $('gold').textContent = golden ? 'Golden Arrow earned' : 'Golden Arrow ' + done + '/' + GOALS.length;
+  $('goalState').textContent = golden ? 'Earned. Every arrow you shoot is now gold.'
+    : 'Reach all five goals to earn the Golden Arrow. Your arrows turn gold for good.';
+  $('goals').innerHTML = GOALS.map(g => {
+    const b = bestOf(g[0]), ok = b >= g[2];
+    return '<li' + (ok ? ' class="done"' : '') + '><span>' + (ok ? '\u2713 ' : '') + g[1] + '</span><span>' + b + ' / ' + g[2] + '</span></li>';
+  }).join('');
+}
+
+/* ---------- shooting ---------- */
+function aim() {
+  const hold = ptr.down ? t - ptr.t0 : 0;
+  const p = Math.min(1, hold / (scene.drawTime || 0.65));
+  let amp = ptr.down ? 1 - 0.6 * p : 1;
+  const tired = Math.max(0, hold - 2);
+  amp += Math.min(2.5, tired * 0.9);
+  const a = U * 0.013 * amp;
+  return {
+    x: ptr.x + (Math.sin(t * 2.1) + Math.sin(t * 3.7 + 1) * 0.6) * a,
+    y: ptr.y - (ptr.touch ? 64 : 0) + (Math.cos(t * 1.7 + 2) + Math.sin(t * 4.3) * 0.5) * a,
+    p, tired: tired > 0
+  };
+}
+function fire() {
+  const a = aim(), p = Math.max(0.12, a.p);
+  // An underdrawn bow drops the arrow short; wind pushes it sideways.
+  let x = a.x + wind * U * 0.07, y = a.y + (1 - p) * (1 - p) * U * 0.45;
+  const s = scene.snap && scene.snap(x, y);
+  if (s) { x = s.x; y = s.y; }
+  arrows.push({ x0: W / 2, y0: H + 10, x, y, t: 0, T: 0.34 });
+}
+function stick(ref, x, y) {
+  stuck.push(ref ? { ref, ox: (x - ref.x) / ref.r, oy: (y - ref.y) / ref.r } : { fx: x / W, fy: y / H });
+}
+function pop(x, y, text, color) { pops.push({ x, y, text, color: color || C.white, t: 0 }); }
+function after(sec, fn) { timers.push({ t: sec, fn }); }
+function ringScore(tg, x, y) {
+  const d = Math.hypot(x - tg.x, y - tg.y) / tg.r;
+  if (d >= 1) return { v: 0, l: 'M' };
+  const v = 10 - Math.floor(d * 10);
+  return { v, l: d < 0.05 ? 'X' : String(v) };
+}
+function newWind(max) { wind = max * (0.6 + rand() * 0.4) * (rand() < 0.5 ? -1 : 1); }
+function windText() {
+  const n = Math.round(Math.abs(wind) * 6);
+  return n ? (wind < 0 ? '← ' : '') + n + ' m/s' + (wind > 0 ? ' →' : '') : 'calm';
+}
+
+/* ---------- scenes ---------- */
+function Menu(title, sub, opts, parent, backTo) {
+  const hit = (x, y) => opts.findIndex(o => Math.hypot(x - o.x, y - o.y) < o.r);
+  return {
+    name: title, sub, parent, backTo, menu: true, picked: false, going: false,
+    signs: opts.map(o => o.label),
+    // Pressing a sign looses an arrow straight into that target's bullseye.
+    choose(i) {
+      if (this.picked) return;
+      this.picked = true;
+      arrows.push({ x0: W / 2, y0: H + 10, x: opts[i].x, y: opts[i].y, t: 0, T: 0.34 });
+    },
+    signPos() { return opts.map(o => ({ x: o.x, y: o.y - o.r - 14 })); },
+    layout() {
+      const n = opts.length, span = n === 2 ? 0.44 : 0.32;
+      opts.forEach((o, i) => {
+        o.r = n === 2 ? Math.min(W * 0.17, H * 0.16) : Math.min(W * 0.125, H * 0.15);
+        o.x = W * (0.5 + (i - (n - 1) / 2) * span);
+        o.y = HZ - o.r * 0.75;
+      });
+    },
+    ready() { return !this.picked; },
+    // Any shot that reaches a target is pulled into its bullseye.
+    snap(x, y) { const i = hit(x, y); return i < 0 ? null : { x: opts[i].x, y: opts[i].y }; },
+    update() {},
+    draw() { opts.forEach(o => drawTarget(o)); },
+    land(x, y) {
+      const i = hit(x, y);
+      if (i < 0) return false;
+      if (this.going) return true;
+      this.picked = this.going = true;
+      stick(opts[i], opts[i].x, opts[i].y);
+      pop(opts[i].x, opts[i].y - opts[i].r * 0.45, 'Bullseye!', C.gold);
+      after(0.75, () => go(opts[i].make()));
+      return true;
+    },
+    stat() { return []; }
+  };
+}
+
+// Classic: a flat-out sprint down the range while targets rush past on both sides.
+function Rush() {
+  const ts = [];
+  let score = 0, away = 0, spawn = 0.6, run = 0, dist = 0, sp = 1;
+  const drop = () => (H - HZ) * 1.15;
+  function place(tg) {
+    const s = 1 / tg.d;
+    tg.r = U * 0.2 * s;
+    tg.x = W / 2 + tg.lane * W * 0.62 * s;
+    tg.y = HZ + drop() * s - tg.r * 1.35;
+  }
+  return {
+    name: 'Classic', key: 'rush', again: Rush, parent: mainMenu, backTo: 'Range', drawTime: 0.35,
+    sub: 'Hit the targets as they rush past. Let 5 get away and the run is over.',
+    layout() { ts.forEach(place); },
+    ready() { return !this.ended; },
+    update(dt) {
+      if (this.ended) return;
+      run += dt; sp = Math.min(2.6, 1 + run * 0.035) * 0.7; dist += sp * dt * 3.2;
+      spawn -= dt * sp;
+      if (spawn <= 0) {
+        spawn = 1.1 + rand() * 0.7;
+        ts.push({ d: 10, lane: (rand() < 0.5 ? -1 : 1) * (0.35 + rand() * 0.5), x: 0, y: 0, r: 0 });
+      }
+      for (let i = ts.length; i--;) {
+        const tg = ts[i];
+        tg.d -= sp * dt * 3.2; place(tg);
+        if (tg.d < 0.9) {
+          ts.splice(i, 1); away++;
+          pop(Math.max(70, Math.min(W - 70, tg.x)), H * 0.8, 'Got away', C.white);
+          if (away >= 5) { finish(score, 'points before 5 got away'); break; }
+        }
+      }
+    },
+    draw() {
+      // Bands of mown grass sweeping toward you give the sense of speed.
+      ctx.fillStyle = 'rgba(247,245,238,.09)';
+      const f = dist % 1;
+      for (let k = 0; k < 13; k++) {
+        const d = k + 1 - f;
+        if (d < 0.25) continue;
+        const y1 = HZ + drop() / (d + 0.5), y2 = HZ + drop() / d;
+        ctx.fillRect(0, y1, W, Math.min(H, y2) - y1);
+      }
+      ts.slice().sort((a, b) => b.d - a.d).forEach(tg => drawTarget(tg));
+    },
+    land(x, y) {
+      if (this.ended) return true;
+      for (const tg of ts.slice().sort((a, b) => a.d - b.d)) {
+        const s = ringScore(tg, x, y);
+        if (!s.v) continue;
+        score += s.v;
+        pop(tg.x, tg.y - tg.r * 0.5, '+' + s.v, s.v >= 9 ? C.gold : C.white);
+        for (let j = 0; j < 12; j++) { const a = rand() * TAU, v = U * (0.2 + rand() * 0.35); parts.push({ x: tg.x, y: tg.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, c: RINGS[(j * 3) % 10] }); }
+        ts.splice(ts.indexOf(tg), 1);
+        break;
+      }
+      return true;
+    },
+    stat() { return [['Speed', Math.round(sp * 30) + ' km/h'], ['Away', away + '/5'], ['Score', score]]; }
+  };
+}
+
+function Bullseyes(secs) {
+  const tg = { fx: 0.5, k: 1, x: 0, y: 0, r: 0 };
+  let time = secs, hits = 0, moving = false;
+  return {
+    name: 'Bullseyes', key: 'bullseye' + secs, again: () => Bullseyes(secs), parent: bullMenu, backTo: 'Bullseyes',
+    sub: secs + ' seconds. Only the gold counts.',
+    layout() {
+      tg.r = Math.min(W * 0.2, H * 0.2) * tg.k * 1.4;
+      tg.x = Math.max(tg.r + 8, Math.min(W - tg.r - 8, tg.fx * W)); tg.y = HZ - tg.r * 0.7;
+    },
+    ready() { return !this.ended; },
+    update(dt) {
+      if (this.ended) return;
+      time -= dt;
+      if (time <= 0) { time = 0; finish(hits, (hits === 1 ? 'bullseye' : 'bullseyes') + ' in ' + secs + ' seconds'); }
+    },
+    draw() { drawTarget(tg); },
+    land(x, y) {
+      const s = ringScore(tg, x, y);
+      if (!s.v) return false;
+      stick(tg, x, y);
+      if (this.ended || moving) return true;
+      if (s.v < 9) { pop(x, y - 10, s.l, C.white); return true; }
+      hits++; moving = true;
+      pop(tg.x, tg.y - tg.r, 'Bullseye!', C.gold);
+      // The target moves and changes size after every bullseye.
+      after(0.4, () => { stuck = stuck.filter(a => a.ref !== tg); tg.fx = 0.2 + rand() * 0.6; tg.k = 0.6 + rand() * 0.4; this.layout(); moving = false; });
+      return true;
+    },
+    stat() { return [['Time', Math.ceil(time) + ' s'], ['Bullseyes', hits]]; }
+  };
+}
+
+function Balloons() {
+  // Same order as the rings on a target face: the nearer to gold, the smaller, faster and more valuable.
+  const kinds = [
+    { c: C.white, tc: C.ink, p: 1, k: 0.06, v: 0.17 }, { c: C.black, tc: C.white, p: 2, k: 0.054, v: 0.2 },
+    { c: C.blue, tc: C.white, p: 3, k: 0.048, v: 0.24 }, { c: C.red, tc: C.white, p: 4, k: 0.042, v: 0.29 },
+    { c: C.gold, tc: C.ink, p: 5, k: 0.035, v: 0.36 }];
+  let time = 30, score = 0, spawn = 0.3;
+  const bs = [];
+  return {
+    name: 'Balloons', key: 'balloons', again: Balloons, parent: hub,
+    sub: 'White 1, black 2, blue 3, red 4, gold 5.',
+    layout() {},
+    ready() { return !this.ended; },
+    update(dt) {
+      if (this.ended) return;
+      time -= dt; spawn -= dt;
+      if (spawn <= 0) {
+        spawn = 1 + rand() * 0.8;
+        const kind = kinds[Math.floor(rand() * 5)];
+        bs.push({ ...kind, fx: 0.12 + rand() * 0.76, y: H + U * 0.1, v: kind.v * (0.9 + rand() * 0.25), ph: rand() * 6 });
+      }
+      for (let i = bs.length; i--;) {
+        const b = bs[i];
+        b.y -= b.v * H * dt; b.r = b.k * U; b.x = b.fx * W + Math.sin(t * 1.5 + b.ph) * U * 0.02;
+        if (b.y < -b.r * 3) bs.splice(i, 1);
+      }
+      if (time <= 0) { time = 0; finish(score, 'points in 30 seconds'); }
+    },
+    draw() { bs.forEach(drawBalloon); },
+    land(x, y) {
+      if (this.ended) return false;
+      const i = bs.findIndex(b => Math.hypot(x - b.x, y - b.y) < b.r * 1.15);
+      if (i < 0) return false;
+      const b = bs.splice(i, 1)[0];
+      score += b.p;
+      pop(b.x, b.y, '+' + b.p, b.c);
+      for (let j = 0; j < 10; j++) { const a = rand() * TAU, v = U * (0.2 + rand() * 0.3); parts.push({ x: b.x, y: b.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, c: b.c }); }
+      return true;
+    },
+    stat() { return [['Time', Math.ceil(time) + ' s'], ['Score', score]]; }
+  };
+}
+
+function Apple() {
+  const d = { fx: 0.5, x: 0, y: 0, r: 0 };   // straw dummy; x,y is the head
+  let round = 0, misses = 0, lock = false;
+  const appleR = () => Math.max(U * 0.012, U * 0.034 * Math.pow(0.88, round));
+  return {
+    name: 'Apple', key: 'apple', again: Apple, parent: hub,
+    sub: 'Hit the apple. Three misses and you are out.',
+    enter() { wind = 0; },
+    layout() { d.r = U * 0.05; d.x = d.fx * W; d.y = HZ - d.r * 4.7; },
+    ready() { return !this.ended && !lock && !arrows.length; },
+    update() {},
+    draw() {
+      if (wind) drawFlag(d.x + d.r * 3.4, HZ + d.r, d.r * 2.4);
+      const r = d.r, top = d.y + r * 0.9;
+      ctx.fillStyle = C['wood-dark']; ctx.fillRect(d.x - r * 0.18, top + r * 4, r * 0.36, r * 2.2);
+      ctx.fillStyle = C.straw; ctx.strokeStyle = C.wood; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(d.x - r * 1.6, top, r * 3.2, r * 5, r * 0.7); ctx.fill(); ctx.stroke();
+      for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(d.x - r * 1.6, top + r * 1.25 * i); ctx.lineTo(d.x + r * 1.6, top + r * 1.25 * i); ctx.stroke(); }
+      ctx.beginPath(); ctx.arc(d.x, d.y, r, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = C.ink;
+      ctx.beginPath(); ctx.arc(d.x - r * 0.35, d.y - r * 0.1, r * 0.09, 0, TAU); ctx.arc(d.x + r * 0.35, d.y - r * 0.1, r * 0.09, 0, TAU); ctx.fill();
+      if (lock) return;
+      const ar = appleR(), ay = d.y - r - ar * 0.9;
+      ctx.fillStyle = C.red; ctx.beginPath(); ctx.arc(d.x, ay, ar, 0, TAU); ctx.fill();
+      ctx.strokeStyle = C['wood-dark']; ctx.lineWidth = Math.max(1.5, ar * 0.14);
+      ctx.beginPath(); ctx.moveTo(d.x, ay - ar * 0.8); ctx.lineTo(d.x + ar * 0.25, ay - ar * 1.45); ctx.stroke();
+    },
+    land(x, y) {
+      const r = d.r, ar = appleR(), ay = d.y - r - ar * 0.9;
+      if (Math.hypot(x - d.x, y - ay) < ar * 1.15) {
+        round++; lock = true;
+        pop(d.x, ay - ar, 'Split!', C.gold);
+        for (let j = 0; j < 8; j++) { const a = rand() * TAU, v = U * (0.15 + rand() * 0.25); parts.push({ x: d.x, y: ay, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, c: C.red }); }
+        after(0.8, () => { stuck = []; d.fx = 0.22 + rand() * 0.56; newWind(Math.min(1, round * 0.15)); this.layout(); lock = false; });
+        return true;
+      }
+      misses++;
+      const body = Math.abs(x - d.x) < r * 1.6 && y > d.y + r * 0.9 && y < d.y + r * 5.9;
+      const head = Math.hypot(x - d.x, y - d.y) < r;
+      pop(x, y - 10, body || head ? 'Ouch!' : 'Miss', C.white);
+      if (misses >= 3) finish(round, round === 1 ? 'apple split' : 'apples split');
+      if (body || head) { stick(d, x, y); return true; }
+      return false;
+    },
+    stat() { return [['Wind', windText()], ['Misses', misses + '/3'], ['Apples', round]]; }
+  };
+}
+
+const bullMenu = () => Menu('Bullseyes', 'How long do you want on the clock?', [
+  { label: '30 sec', make: () => Bullseyes(30) }, { label: '60 sec', make: () => Bullseyes(60) }], hub, 'Minigames');
+const hub = () => Menu('Minigames', 'Shoot one to play', [
+  { label: 'Bullseyes', make: bullMenu }, { label: 'Apple', make: Apple }, { label: 'Balloons', make: Balloons }], mainMenu, 'Range');
+const mainMenu = () => Menu('Nock & Loose', 'Hold to draw, release to loose. Shoot a target to choose.', [
+  { label: 'Minigames', tint: 'red', make: hub }, { label: 'Classic', tint: 'blue', make: Rush }], null);
+
+/* ---------- scene plumbing ---------- */
+function go(s) {
+  scene = s; arrows = []; stuck = []; pops = []; parts = []; timers = []; ptr.down = false; wind = 0;
+  $('result').hidden = true;
+  $('h1').hidden = !s.menu; $('h1').textContent = s.name; $('sub').textContent = s.sub;
+  $('back').hidden = !s.parent; $('gold').hidden = !s.menu; $('trophy').hidden = true;
+  $('back').textContent = '← ' + (s.backTo || 'Minigames');
+  const box = $('signs'); box.textContent = '';
+  (s.signs || []).forEach((label, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'sign'; b.id = 'sign-' + label.toLowerCase().replace(/\W+/g, '-'); b.textContent = label;
+    b.onclick = () => s.choose(i);
+    box.appendChild(b);
+  });
+    layout();
+}
+function layout() {
+  if (!scene || !W) return;
+  scene.layout();
+  if (scene.signPos) scene.signPos().forEach((p, i) => {
+    const b = $('signs').children[i];
+    b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
+  });
+}
+function finish(score, note) {
+  const s = scene; s.ended = true;
+  after(0.9, () => {
+    const was = golden, old = bestOf(s.key), fresh = score > old, best = Math.max(old, score);
+    if (fresh) saveBest(s.key, score);
+    refreshGold();
+    const goal = GOALS.find(g => g[0] === s.key);
+    $('rGoal').textContent = golden && !was ? 'Golden Arrow earned! Your arrows are now gold.'
+      : goal ? 'Golden Arrow goal: ' + goal[2] + (best >= goal[2] ? ' (reached)' : '') : '';
+    $('rName').textContent = s.name; $('rScore').textContent = score; $('rNote').textContent = note;
+    $('rBest').textContent = fresh ? 'New personal best' : 'Personal best ' + best;
+    $('result').hidden = false; $('again').focus();
+  });
+}
+$('back').onclick = () => go(scene.parent());
+$('again').onclick = () => go(scene.again());
+$('home').onclick = () => go(mainMenu());
+$('gold').onclick = () => { ptr.down = false; refreshGold(); $('trophy').hidden = false; $('trophyClose').focus(); };
+$('trophyClose').onclick = () => { $('trophy').hidden = true; $('gold').focus(); };
+
+/* ---------- input ---------- */
+function place(e) {
+  const r = cv.getBoundingClientRect();
+  ptr.x = e.clientX - r.left; ptr.y = e.clientY - r.top;
+  ptr.touch = e.pointerType === 'touch'; ptr.seen = true;
+}
+function draw_() { if (scene.ready() && !ptr.down) { ptr.down = true; ptr.t0 = t; } }
+function loose() {
+  if (!ptr.down) return;
+  if (scene.ready()) { fire(); if (scene.shot) scene.shot(); }
+  ptr.down = false;
+}
+cv.addEventListener('pointerdown', e => { place(e); try { cv.setPointerCapture(e.pointerId); } catch (x) {} draw_(); e.preventDefault(); });
+cv.addEventListener('pointermove', place);
+cv.addEventListener('pointerup', e => { place(e); loose(); });
+cv.addEventListener('pointercancel', () => { ptr.down = false; });
+cv.addEventListener('keydown', e => {
+  const step = e.shiftKey ? 3 : 14;
+  const mv = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+  if (!ptr.seen) { ptr.x = W / 2; ptr.y = HZ; }
+  if (mv) { ptr.x = Math.max(0, Math.min(W, ptr.x + mv[0] * step)); ptr.y = Math.max(0, Math.min(H, ptr.y + mv[1] * step)); ptr.touch = false; ptr.seen = true; e.preventDefault(); }
+  else if (e.key === ' ') { ptr.touch = false; ptr.seen = true; if (!e.repeat) draw_(); e.preventDefault(); }
+});
+cv.addEventListener('keyup', e => { if (e.key === ' ') loose(); });
+
+/* ---------- drawing ---------- */
+function drawBackdrop() {
+  const g = ctx.createLinearGradient(0, 0, 0, HZ);
+  g.addColorStop(0, C.sky); g.addColorStop(1, C['sky-low']);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, HZ);
+  ctx.fillStyle = 'rgba(247,245,238,.85)';
+  for (let i = 0; i < 4; i++) {
+    const cw = U * (0.16 + (i % 3) * 0.05), span = W + cw * 4;
+    const x = ((i * 0.29 * span + (calm ? 0 : t * (5 + i * 2))) % span) - cw * 2, y = HZ * (0.14 + ((i * 37) % 50) / 100);
+    ctx.beginPath(); ctx.ellipse(x, y, cw, cw * 0.22, 0, 0, TAU); ctx.ellipse(x + cw * 0.4, y - cw * 0.14, cw * 0.55, cw * 0.24, 0, 0, TAU); ctx.fill();
+  }
+  ctx.fillStyle = C.tree; ctx.beginPath(); ctx.moveTo(0, HZ);
+  const n = Math.ceil(W / 26);
+  for (let i = 0; i <= n; i++) { const x = i / n * W, h = U * (0.035 + 0.03 * Math.abs(Math.sin(i * 12.9898) * Math.cos(i * 4.1))); ctx.arc(x, HZ - h * 0.3, h, Math.PI, 0); }
+  ctx.lineTo(W, HZ + 2); ctx.lineTo(0, HZ + 2); ctx.fill();
+  ctx.fillStyle = C.grass; ctx.fillRect(0, HZ, W, H - HZ);
+  ctx.fillStyle = C['grass-dark'];   // mown lanes converging on the horizon
+  const lanes = 12, bw = W * 2.6 / lanes;
+  for (let i = 0; i < lanes; i += 2) {
+    const x0 = W / 2 + (i - lanes / 2) * bw;
+    ctx.beginPath(); ctx.moveTo(W / 2 + (i - lanes / 2) * bw * 0.04, HZ); ctx.lineTo(W / 2 + (i + 1 - lanes / 2) * bw * 0.04, HZ); ctx.lineTo(x0 + bw, H); ctx.lineTo(x0, H); ctx.fill();
+  }
+}
+function drawTarget(o, hanging) {
+  const { x, y, r } = o;
+  if (!hanging) {
+    ctx.strokeStyle = C['wood-dark']; ctx.lineWidth = Math.max(1.5, r * 0.08); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x - r * 0.45, y - r * 0.7); ctx.lineTo(x - r * 0.85, y + r * 1.35);
+    ctx.moveTo(x + r * 0.45, y - r * 0.7); ctx.lineTo(x + r * 0.85, y + r * 1.35); ctx.stroke();
+  }
+  ctx.fillStyle = C.straw; ctx.beginPath(); ctx.arc(x, y, r * 1.09, 0, TAU); ctx.fill();
+  const tint = o.tint && C[o.tint];   // menu targets are painted in one color with white bands
+  RINGS.forEach((c, i) => {
+    ctx.fillStyle = tint ? (i % 4 < 2 ? tint : C.white) : c; ctx.beginPath(); ctx.arc(x, y, r * (1 - i / 10), 0, TAU); ctx.fill();
+    ctx.strokeStyle = !tint && (i === 3 || i === 2) ? 'rgba(247,245,238,.5)' : 'rgba(34,38,43,.35)'; ctx.lineWidth = 1; ctx.stroke();
+  });
+  ctx.strokeStyle = 'rgba(34,38,43,.5)'; ctx.beginPath(); ctx.arc(x, y, r * 0.05, 0, TAU); ctx.stroke();
+}
+function drawFlag(x, base, size) {
+  const top = base - size * 2.1, len = size * (0.25 + Math.abs(wind) * 0.75), dir = Math.sign(wind) || 1;
+  ctx.strokeStyle = C['wood-dark']; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x, base); ctx.lineTo(x, top); ctx.stroke();
+  const wave = calm ? 0 : Math.sin(t * 6) * size * 0.06 * Math.abs(wind);
+  const droop = (1 - Math.abs(wind)) * size * 0.35;
+  ctx.fillStyle = C.red; ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x + dir * len, top + size * 0.16 + droop + wave); ctx.lineTo(x, top + size * 0.34); ctx.fill();
+}
+function drawBalloon(b) {
+  ctx.strokeStyle = 'rgba(34,38,43,.45)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(b.x, b.y + b.r * 1.2); ctx.quadraticCurveTo(b.x + b.r * 0.3, b.y + b.r * 2, b.x, b.y + b.r * 2.8); ctx.stroke();
+  ctx.fillStyle = b.c; ctx.beginPath(); ctx.ellipse(b.x, b.y, b.r, b.r * 1.18, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(34,38,43,.35)'; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(b.x, b.y + b.r * 1.15); ctx.lineTo(b.x - b.r * 0.14, b.y + b.r * 1.36); ctx.lineTo(b.x + b.r * 0.14, b.y + b.r * 1.36); ctx.fill();
+  ctx.fillStyle = b.tc; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = '700 ' + Math.round(b.r) + 'px ' + UI; ctx.fillText(b.p, b.x, b.y + b.r * 0.08); ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.beginPath(); ctx.ellipse(b.x - b.r * 0.35, b.y - b.r * 0.45, b.r * 0.18, b.r * 0.3, 0.5, 0, TAU); ctx.fill();
+}
+function shaft(x1, y1, x2, y2, w) {   // tip at 1, fletching at 2
+  ctx.lineCap = 'round'; ctx.strokeStyle = golden ? C.gold : C['wood-dark']; ctx.lineWidth = w;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.strokeStyle = golden ? C.white : C.red; ctx.lineWidth = w * 2.4;
+  ctx.beginPath(); ctx.moveTo(x1 + (x2 - x1) * 0.72, y1 + (y2 - y1) * 0.72); ctx.lineTo(x2, y2); ctx.stroke();
+}
+function drawStuck(s) {
+  if (s.ref) {
+    const x = s.ref.x + s.ox * s.ref.r, y = s.ref.y + s.oy * s.ref.r, len = Math.max(s.ref.r * 0.45, U * 0.035);
+    shaft(x, y, x + (x - W / 2) * 0.06, y + len, Math.max(1.5, len * 0.07));
+    ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(x, y, Math.max(1.5, len * 0.07), 0, TAU); ctx.fill();
+  } else {
+    const x = s.fx * W, y = s.fy * H, len = U * 0.03 + (y - HZ) * 0.12;
+    shaft(x, y, x + (x - W / 2) * 0.05, y - len, Math.max(1.5, len * 0.07));
+  }
+}
+function drawFlight(a) {
+  const k = a.t / a.T, e = 1 - (1 - k) * (1 - k);
+  const x = a.x0 + (a.x - a.x0) * e, y = a.y0 + (a.y - a.y0) * e - Math.sin(Math.PI * k) * U * 0.05;
+  const len = U * 0.2 * (1 - k * 0.85), dx = a.x0 - a.x, dy = a.y0 - a.y, m = Math.hypot(dx, dy) || 1;
+  shaft(x, y, x + dx / m * len, y + dy / m * len, Math.max(1.5, 5 * (1 - k * 0.7)));
+}
+function drawAim() {
+  if (!ptr.seen || !scene.ready()) return;
+  const a = aim();
+  if (ptr.down) {   // nocked arrow at the shooting line
+    const dx = a.x - W / 2, dy = a.y - H, m = Math.hypot(dx, dy) || 1, len = U * 0.2 * (1 - 0.55 * a.p);
+    shaft(W / 2 + dx / m * len, H + dy / m * len, W / 2, H + 4, 5);
+  }
+  ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.lineCap = 'butt';
+  ctx.beginPath(); ctx.arc(a.x, a.y, 9, 0, TAU);
+  for (let i = 0; i < 4; i++) { const q = i * Math.PI / 2; ctx.moveTo(a.x + Math.cos(q) * 5, a.y + Math.sin(q) * 5); ctx.lineTo(a.x + Math.cos(q) * 14, a.y + Math.sin(q) * 14); }
+  ctx.stroke();
+  ctx.fillStyle = C.red; ctx.beginPath(); ctx.arc(a.x, a.y, 1.8, 0, TAU); ctx.fill();
+  if (ptr.down) {
+    ctx.lineWidth = 4; ctx.strokeStyle = a.tired ? C.red : a.p >= 1 ? C.gold : C.white;
+    ctx.beginPath(); ctx.arc(a.x, a.y, 19, -Math.PI / 2, -Math.PI / 2 + TAU * a.p); ctx.stroke();
+  }
+}
+
+/* ---------- loop ---------- */
+let statKey = '';
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+  if (W && scene) {
+    for (let i = timers.length; i--;) { const tm = timers[i]; if ((tm.t -= dt) <= 0) { timers.splice(i, 1); tm.fn(); } }
+    scene.update(dt);
+    for (let i = arrows.length; i--;) {
+      const a = arrows[i];
+      if ((a.t += dt) >= a.T) { arrows.splice(i, 1); if (!scene.land(a.x, a.y) && a.y > HZ) stick(null, a.x, a.y); }
+    }
+    pops = pops.filter(p => (p.t += dt) < 1);
+    parts = parts.filter(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += U * 1.2 * dt; return (p.t += dt) < 0.5; });
+
+    drawBackdrop();
+    stuck.forEach(s => { if (!s.ref) drawStuck(s); });
+    scene.draw();
+    stuck.forEach(s => { if (s.ref) drawStuck(s); });
+    arrows.forEach(drawFlight);
+    parts.forEach(p => { ctx.globalAlpha = 1 - p.t / 0.5; ctx.fillStyle = p.c; ctx.fillRect(p.x - 3, p.y - 3, 6, 6); });
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center'; ctx.font = Math.round(Math.max(20, U * 0.05)) + 'px ' + DISPLAY;
+    pops.forEach(p => {
+      ctx.globalAlpha = Math.min(1, (1 - p.t) * 3);
+      const y = p.y - p.t * U * 0.07;
+      ctx.lineWidth = 5; ctx.lineJoin = 'round'; ctx.strokeStyle = C.ink; ctx.strokeText(p.text, p.x, y);
+      ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, y);
+    });
+    ctx.globalAlpha = 1;
+    drawAim();
+
+    const st = scene.stat(), key = st.join('|');
+    if (key !== statKey) { statKey = key; $('stats').innerHTML = st.map(s => '<span>' + s[0] + '<b>' + s[1] + '</b></span>').join(''); }
+  }
+  requestAnimationFrame(frame);
+}
+function resize() {
+  const r = stage.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 2);
+  W = r.width; H = r.height; U = Math.min(W, H); HZ = H * 0.62;
+  cv.width = Math.round(W * d); cv.height = Math.round(H * d);
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  layout();
+}
+let last = performance.now();
+new ResizeObserver(resize).observe(stage);
+go(mainMenu());
+refreshGold();
+resize();
+requestAnimationFrame(frame);
+})();
+</script>
