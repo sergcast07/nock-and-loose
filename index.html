@@ -195,8 +195,8 @@ function refreshGold() {
   const done = GOALS.filter(met).length;
   golden = done === GOALS.length;
   $('gold').innerHTML = '<span class="wide">Golden Arrow </span>★ ' + (golden ? 'earned' : done + '/' + GOALS.length);
-  $('goalState').textContent = golden ? 'Earned. The Golden Arrow is yours to equip in My gear.'
-    : 'Reach all ' + GOALS.length + ' goals to earn the Golden Arrow, a gold arrow no coins can buy.';
+  $('goalState').textContent = golden ? 'Earned. The Golden Arrow and Golden Bow are yours to equip in My gear.'
+    : 'Reach all ' + GOALS.length + ' goals to earn the Golden Arrow and the Golden Bow. No coins can buy them.';
   $('goals').innerHTML = GOALS.map(g => {
     const b = bestOf(g[0]), ok = met(g);
     return '<li' + (ok ? ' class="done"' : '') + '><span>' + (ok ? '✓ ' : '') + g[1] + '</span><span>' +
@@ -212,7 +212,8 @@ const SHOP = {
     { id: 'candy', name: 'Candy cane bow', a: C.white, b: C.red, dash: true, price: 150 },
     { id: 'frost', name: 'Frost bow', a: '#9fdcf5', b: C.white, s: '#dff4ff', price: 180 },
     { id: 'neon', name: 'Neon bow', a: '#b6ff3c', b: '#ff4fd8', glow: true, price: 220 },
-    { id: 'dragon', name: 'Dragon bow', a: '#1f6b45', b: C.gold, spikes: true, price: 300 }],
+    { id: 'dragon', name: 'Dragon bow', a: '#1f6b45', b: C.gold, spikes: true, price: 300 },
+    { id: 'golden', name: 'Golden Bow', a: C.gold, b: C.white, s: C.gold, glow: true, earn: true }],
   arrow: [   // a: shaft, b: feathers, fx: special effect
     { id: 'wood', name: 'Classic', a: C['wood-dark'], b: C.red, price: 0 },
     { id: 'blue', name: 'Blue feather', a: C['wood-dark'], b: C.blue, price: 50 },
@@ -699,11 +700,11 @@ function finish(score, note) {
     const earned = s.coin ? s.coin(score) : 0;
     save.coins += earned;
     refreshGold();
-    if (golden && !was) save.eq.arrow = 'golden';
+    if (golden && !was) save.eq.arrow = save.eq.bow = 'golden';
     store(); refreshShop();
     const goal = GOALS.find(g => g[0] === s.key);
     $('rCoins').textContent = '+' + earned + (earned === 1 ? ' coin' : ' coins');
-    $('rGoal').textContent = golden && !was ? 'Golden Arrow earned! It is equipped, and it lives in My gear.'
+    $('rGoal').textContent = golden && !was ? 'Golden Arrow and Golden Bow earned! Both are equipped, and they live in My gear.'
       : goal ? 'Golden Arrow goal: ' + goal[2] + (goal[3] ? ' or fewer' : '') + (met(goal) ? ' (reached)' : '') : '';
     $('rName').textContent = s.name; $('rScore').textContent = score; $('rNote').textContent = note;
     $('rBest').textContent = fresh ? 'New personal best' : 'Personal best ' + best;
