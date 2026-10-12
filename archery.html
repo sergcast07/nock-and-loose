@@ -229,6 +229,8 @@ function Menu(title, sub, opts, parent, backTo) {
         o.x = W * (0.5 + (i - (n - 1) / 2) * span);
         o.y = HZ - o.r * 0.75;
       });
+      // The home range starts with an arrow already in each bullseye.
+      if (!parent && !this.seeded) { this.seeded = true; opts.forEach(o => stick(o, o.x, o.y)); }
     },
     ready() { return !this.picked; },
     // Any shot that reaches a target is pulled into its bullseye.
@@ -240,8 +242,13 @@ function Menu(title, sub, opts, parent, backTo) {
       if (i < 0) return false;
       if (this.going) return true;
       this.picked = this.going = true;
+      const old = stuck.find(a => a.ref === opts[i]);   // the new arrow splits the one already there
+      if (old) {
+        old.split = true;
+        for (let j = 0; j < 8; j++) { const a = rand() * TAU, v = U * (0.12 + rand() * 0.2); parts.push({ x: opts[i].x, y: opts[i].y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, c: C.wood }); }
+      }
       stick(opts[i], opts[i].x, opts[i].y);
-      pop(opts[i].x, opts[i].y - opts[i].r * 0.45, 'Bullseye!', C.gold);
+      pop(opts[i].x, opts[i].y - opts[i].r * 0.45, old ? 'Split!' : 'Bullseye!', C.gold);
       after(0.75, () => go(opts[i].make()));
       return true;
     },
@@ -393,7 +400,7 @@ function Apple() {
   let round = 0, misses = 0, lock = false;
   const appleR = () => Math.max(U * 0.012, U * 0.034 * Math.pow(0.88, round));
   return {
-    name: 'Apple', key: 'apple', again: Apple, parent: hub,
+    name: 'Apple', key: 'apple', again: Apple, parent: appleMenu, backTo: 'Apples',
     sub: 'Hit the apple. Three misses and you are out.',
     enter() { wind = 0; },
     layout() { d.r = U * 0.05; d.x = d.fx * W; d.y = HZ - d.r * 4.7; },
@@ -436,12 +443,55 @@ function Apple() {
   };
 }
 
+// A row of apples on a rail: clear them all in as few arrows as you can.
+function AppleRow() {
+  const N = 8, apples = [];
+  for (let i = 0; i < N; i++) apples.push({ x: 0, y: 0, r: 0, hit: false });
+  let tries = 0, left = N;
+  const rail = () => HZ - U * 0.12;
+  return {
+    name: 'Apple row', key: 'applerow', lower: true, again: AppleRow, parent: appleMenu, backTo: 'Apples',
+    sub: N + ' apples in a row. Clear them in as few arrows as you can.',
+    layout() {
+      apples.forEach((a, i) => { a.r = Math.min(U * 0.03, W * 0.04); a.x = W * (0.12 + 0.76 * i / (N - 1)); a.y = rail() - a.r; });
+    },
+    ready() { return !this.ended; },
+    update() {},
+    draw() {
+      const y = rail(), th = Math.max(5, U * 0.016);
+      ctx.fillStyle = C['wood-dark'];
+      ctx.fillRect(W * 0.1, y, th, HZ + U * 0.05 - y); ctx.fillRect(W * 0.9 - th, y, th, HZ + U * 0.05 - y);
+      ctx.fillStyle = C.wood; ctx.fillRect(W * 0.06, y, W * 0.88, th);
+      apples.forEach(a => {
+        if (a.hit) return;
+        ctx.fillStyle = C.red; ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, TAU); ctx.fill();
+        ctx.strokeStyle = C['wood-dark']; ctx.lineWidth = Math.max(1.5, a.r * 0.14);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y - a.r * 0.8); ctx.lineTo(a.x + a.r * 0.25, a.y - a.r * 1.45); ctx.stroke();
+      });
+    },
+    land(x, y) {
+      if (this.ended) return false;
+      tries++;
+      const a = apples.find(a => !a.hit && Math.hypot(x - a.x, y - a.y) < a.r * 1.15);
+      if (!a) return false;
+      a.hit = true; left--;
+      pop(a.x, a.y - a.r, left ? left + ' left' : 'Cleared!', C.gold);
+      for (let j = 0; j < 8; j++) { const q = rand() * TAU, v = U * (0.15 + rand() * 0.25); parts.push({ x: a.x, y: a.y, vx: Math.cos(q) * v, vy: Math.sin(q) * v, t: 0, c: C.red }); }
+      if (!left) finish(tries, 'arrows to clear ' + N + ' apples (fewer is better)');
+      return true;
+    },
+    stat() { return [['Apples left', left], ['Arrows', tries]]; }
+  };
+}
+
 const bullMenu = () => Menu('Bullseyes', 'How long do you want on the clock?', [
   { label: '30 sec', make: () => Bullseyes(30) }, { label: '60 sec', make: () => Bullseyes(60) }], hub, 'Minigames');
 const balloonMenu = () => Menu('Balloons', 'How long do you want on the clock?', [
   { label: '30 sec', make: () => Balloons(30) }, { label: '60 sec', make: () => Balloons(60) }], hub, 'Minigames');
+const appleMenu = () => Menu('Apples', 'Which apple game?', [
+  { label: 'One apple', make: Apple }, { label: 'Apple row', make: AppleRow }], hub, 'Minigames');
 const hub = () => Menu('Minigames', 'Shoot one to play', [
-  { label: 'Bullseyes', make: bullMenu }, { label: 'Apple', make: Apple }, { label: 'Balloons', make: balloonMenu }], mainMenu, 'Range');
+  { label: 'Bullseyes', make: bullMenu }, { label: 'Apples', make: appleMenu }, { label: 'Balloons', make: balloonMenu }], mainMenu, 'Range');
 const mainMenu = () => Menu('Nock & Loose', 'Hold to draw, release to loose. Shoot a target to choose.', [
   { label: 'Minigames', tint: 'red', make: hub }, { label: 'Classic', tint: 'blue', make: Rush }], null);
 
@@ -472,7 +522,7 @@ function layout() {
 function finish(score, note) {
   const s = scene; s.ended = true;
   after(0.9, () => {
-    const was = golden, old = bestOf(s.key), fresh = score > old, best = Math.max(old, score);
+    const was = golden, old = bestOf(s.key), fresh = s.lower ? !old || score < old : score > old, best = fresh ? score : old;
     if (fresh) saveBest(s.key, score);
     refreshGold();
     const goal = GOALS.find(g => g[0] === s.key);
@@ -579,7 +629,9 @@ function shaft(x1, y1, x2, y2, w) {   // tip at 1, fletching at 2
 function drawStuck(s) {
   if (s.ref) {
     const x = s.ref.x + s.ox * s.ref.r, y = s.ref.y + s.oy * s.ref.r, len = Math.max(s.ref.r * 0.45, U * 0.035);
-    shaft(x, y, x + (x - W / 2) * 0.06, y + len, Math.max(1.5, len * 0.07));
+    const w = Math.max(1.5, len * 0.07);
+    if (s.split) { shaft(x, y, x - len * 0.5, y + len * 0.85, w * 0.6); shaft(x, y, x + len * 0.5, y + len * 0.85, w * 0.6); return; }
+    shaft(x, y, x + (x - W / 2) * 0.06, y + len, w);
     ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(x, y, Math.max(1.5, len * 0.07), 0, TAU); ctx.fill();
   } else {
     const x = s.fx * W, y = s.fy * H, len = U * 0.03 + (y - HZ) * 0.12;
