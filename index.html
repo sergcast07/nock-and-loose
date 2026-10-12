@@ -77,6 +77,7 @@ canvas:focus-visible, button:focus-visible { outline: 3px solid var(--gold); }
   box-shadow: 0 4px 0 rgba(34, 38, 43, .18);
 }
 .sign:nth-child(even) { --tilt: 2deg; }
+.many .sign { font-size: clamp(12px, 2.6vw, 20px); }
 .sign:hover { background: var(--wood-dark); }
 
 .result {
@@ -115,6 +116,7 @@ canvas:focus-visible, button:focus-visible { outline: 3px solid var(--gold); }
   <canvas id="cv" tabindex="0" aria-label="Archery range. Press and hold to draw the bow, release to loose. With a keyboard, aim with the arrow keys and hold Space."></canvas>
   <div class="hud">
     <button id="back" type="button" hidden>&larr; Range</button>
+    <button id="musicBtn" type="button" title="Music">&#9834; On</button>
     <button id="gold" type="button">Golden Arrow</button>
     <button id="shopBtn" type="button">Shop</button>
     <div class="stats" id="stats"></div>
@@ -326,8 +328,7 @@ function Menu(title, sub, opts, parent, backTo) {
       this.picked = true;
       arrows.push({ x0: W / 2, y0: H + 10, x: opts[i].x, y: opts[i].y, t: 0, T: 0.34 });
     },
-    // Four signs in a row are staggered on narrow screens so they do not overlap.
-    signPos() { return opts.map((o, i) => ({ x: o.x, y: o.y - o.r - 14 - (opts.length > 3 && W < 620 && i % 2 ? 34 : 0) })); },
+    signPos() { return opts.map(o => ({ x: o.x, y: o.y - o.r - 14 })); },
     layout() {
       const n = opts.length, span = [0, 0, 0.44, 0.32, 0.235][n];
       opts.forEach((o, i) => {
@@ -374,6 +375,7 @@ function Rush() {
     tg.y = HZ + drop() * s - tg.r * 1.35;
   }
   return {
+    intensity: () => Math.min(1, run / 50),
     name: 'Classic', key: 'rush', coin: s => Math.round(s / 3), again: Rush, parent: mainMenu, backTo: 'Range', drawTime: 0.35,
     sub: 'Hit the targets as they rush past. Let 5 get away and the run is over.',
     layout() { ts.forEach(place); },
@@ -431,6 +433,7 @@ function Bullseyes(secs) {
   const tg = { fx: 0.5, k: 1, x: 0, y: 0, r: 0 };
   let time = secs, hits = 0, moving = false;
   return {
+    intensity: () => 1 - time / secs,
     name: 'Bullseyes', key: 'bullseye' + secs, coin: s => s * 4, again: () => Bullseyes(secs), parent: bullMenu, backTo: 'Bullseyes',
     sub: secs + ' seconds. Only the center counts.',
     layout() {
@@ -469,6 +472,7 @@ function Balloons(secs) {
   let time = secs, score = 0, spawn = 0.3, streak = 0;
   const bs = [];
   return {
+    intensity: () => 1 - time / secs,
     name: 'Balloons', key: secs === 30 ? 'balloons' : 'balloons60', coin: s => Math.round(s * 0.6), again: () => Balloons(secs), parent: balloonMenu, backTo: 'Balloons',
     sub: 'White 1, black 2, blue 3, red 4, gold 5.',
     layout() {},
@@ -509,6 +513,7 @@ function Apple() {
   let round = 0, misses = 0, lock = false;
   const appleR = () => Math.max(U * 0.012, U * 0.034 * Math.pow(0.88, round));
   return {
+    intensity: () => Math.min(1, round / 6 + misses * 0.15),
     name: 'Apple', key: 'apple', coin: s => s * 6, again: Apple, parent: appleMenu, backTo: 'Apples',
     sub: 'Hit the apple. Three misses and you are out.',
     enter() { wind = 0; },
@@ -556,9 +561,10 @@ function Pendulum() {
   const tg = { x: 0, y: 0, r: 0 }, pv = { x: 0, y: 0, L: 0 };
   let left = 5, landed = 0, total = 0;
   return {
+    intensity: () => landed / 5,
     name: 'Pendulum', key: 'pendulum', coin: s => Math.round(s / 3), again: Pendulum, parent: hub,
-    sub: '5 arrows at a swinging target.',
-    layout() { pv.x = W / 2; pv.y = H * 0.14; pv.L = Math.min(H * 0.38, W * 0.55); tg.r = Math.min(W * 0.13, H * 0.13); this.update(0); },
+    sub: '5 arrows at a swinging target. It moves back after every shot.',
+    layout() { pv.x = W / 2; pv.y = H * 0.14; pv.L = Math.min(H * 0.38, W * 0.55); tg.r = Math.min(W * 0.13, H * 0.13) * Math.pow(0.84, Math.min(landed, 4)); this.update(0); },
     ready() { return !this.ended && left > 0; },
     shot() { left--; },
     update() {
@@ -579,11 +585,11 @@ function Pendulum() {
       total += s.v; landed++;
       pop(x, y - 10, s.v ? s.l : 'Miss', s.v >= 9 ? C.gold : C.white);
       if (landed === 5) finish(total, 'out of 50');
-      if (!s.v) return false;
-      stick(tg, x, y);
-      return true;
+      if (s.v) stick(tg, x, y);
+      this.layout();   // the target is now further away, so it looks smaller
+      return !!s.v;
     },
-    stat() { return [['Arrows', left], ['Score', total]]; }
+    stat() { return [['Range', 20 + Math.min(landed, 4) * 10 + ' m'], ['Arrows', left], ['Score', total]]; }
   };
 }
 
@@ -594,6 +600,7 @@ function AppleRow() {
   let tries = 0, left = N;
   const rail = () => HZ - U * 0.12;
   return {
+    intensity: () => (N - left) / N,
     name: 'Apple row', key: 'applerow12', lower: true, coin: s => Math.max(3, 40 - s), again: AppleRow, parent: appleMenu, backTo: 'Apples',
     sub: N + ' apples in a row. Clear them in as few arrows as you can.',
     layout() {
@@ -647,7 +654,7 @@ function go(s) {
   $('h1').hidden = !s.menu; $('h1').textContent = s.name; $('sub').textContent = s.sub;
   $('back').hidden = !s.parent; $('gold').hidden = $('shopBtn').hidden = !s.menu; $('trophy').hidden = $('shop').hidden = true;
   $('back').textContent = '← ' + (s.backTo || 'Minigames');
-  const box = $('signs'); box.textContent = '';
+  const box = $('signs'); box.textContent = ''; box.className = s.signs && s.signs.length > 3 ? 'many' : '';
   (s.signs || []).forEach((label, i) => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'sign'; b.id = 'sign-' + label.toLowerCase().replace(/\W+/g, '-'); b.textContent = label;
@@ -659,11 +666,17 @@ function go(s) {
 function layout() {
   if (!scene || !W) return;
   scene.layout();
-  if (scene.signPos) scene.signPos().forEach((p, i) => {
-    const b = $('signs').children[i];
-    b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
+  if (!scene.signPos) return;
+  // Measure the signs: if neighbors would touch, raise every second one; keep them all on screen.
+  const pos = scene.signPos(), kids = [...$('signs').children], w = kids.map(b => b.offsetWidth);
+  const tight = pos.some((p, i) => i && p.x - pos[i - 1].x < (w[i] + w[i - 1]) / 2 + 12);
+  pos.forEach((p, i) => {
+    const x = Math.max(w[i] / 2 + 6, Math.min(W - w[i] / 2 - 6, p.x));
+    kids[i].style.left = x + 'px';
+    kids[i].style.top = p.y - (tight && i % 2 ? kids[i].offsetHeight + 4 : 0) + 'px';
   });
 }
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
 function finish(score, note) {
   const s = scene; s.ended = true;
   after(0.9, () => {
@@ -688,6 +701,82 @@ $('again').onclick = () => go(scene.again());
 $('home').onclick = () => go(mainMenu());
 $('gold').onclick = () => { ptr.down = false; refreshGold(); $('trophy').hidden = false; $('trophyClose').focus(); };
 $('trophyClose').onclick = () => { $('trophy').hidden = true; $('gold').focus(); };
+
+/* ---------- music: a looping tune that adds layers and speeds up as a round heats up ---------- */
+const music = { ac: null, out: null, noise: null, on: true, next: 0, step: 0, I: 0 };
+try { music.on = localStorage.getItem('nl-music') !== 'off'; } catch (e) {}
+const PROG = [[110, 3], [87.31, 4], [130.81, 4], [98, 4]];   // A minor, F, C, G: bass note and its third
+function musicStart() {   // browsers only allow sound after a tap, click or key press
+  if (!music.on) return;
+  if (!music.ac) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ac = music.ac = new AC();
+    music.out = ac.createGain(); music.out.gain.value = 0.5; music.out.connect(ac.destination);
+    music.noise = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.1), ac.sampleRate);
+    const d = music.noise.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = rand() * 2 - 1;
+  }
+  if (music.ac.state === 'suspended') music.ac.resume();
+}
+function tone(type, f, when, dur, vol, cut) {
+  const ac = music.ac, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(vol, when + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  if (cut) { const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = cut; o.connect(lp); lp.connect(g); }
+  else o.connect(g);
+  g.connect(music.out); o.start(when); o.stop(when + dur + 0.03);
+}
+function kick(when) {
+  const ac = music.ac, o = ac.createOscillator(), g = ac.createGain();
+  o.frequency.setValueAtTime(140, when); o.frequency.exponentialRampToValueAtTime(45, when + 0.12);
+  g.gain.setValueAtTime(0.5, when); g.gain.exponentialRampToValueAtTime(0.0001, when + 0.16);
+  o.connect(g); g.connect(music.out); o.start(when); o.stop(when + 0.18);
+}
+function hat(when, vol) {
+  const ac = music.ac, n = ac.createBufferSource(), hp = ac.createBiquadFilter(), g = ac.createGain();
+  n.buffer = music.noise; hp.type = 'highpass'; hp.frequency.value = 7000;
+  g.gain.setValueAtTime(vol, when); g.gain.exponentialRampToValueAtTime(0.0001, when + 0.04);
+  n.connect(hp); hp.connect(g); g.connect(music.out); n.start(when); n.stop(when + 0.06);
+}
+function playStep(i, when, calmNow) {   // one sixteenth note
+  const s = i % 16, bar = Math.floor(i / 16) % 4, root = PROG[bar][0], I = music.I;
+  const semis = [0, PROG[bar][1], 7, 12], note = k => root * 4 * Math.pow(2, semis[k % 4] / 12);
+  if (calmNow) {   // menus and result screens: a slow, quiet arpeggio
+    if (s % 4 === 0) tone('sine', note(s / 4), when, 0.6, 0.1);
+    if (s === 0) tone('triangle', root, when, 1.8, 0.14);
+    return;
+  }
+  if (s % 4 === 0 || (I > 0.35 && s % 2 === 0)) tone('triangle', root * (s % 8 === 6 ? 1.5 : 1), when, 0.22, 0.24);
+  if (s % 8 === 0 || (I > 0.5 && s % 4 === 0)) kick(when);
+  if (I > 0.25 && (s % 2 === 0 || I > 0.75)) tone('square', note(s + bar), when, 0.12, 0.035 + 0.035 * I, 1500 + 2500 * I);
+  if (I > 0.45 && (s % 4 === 2 || (I > 0.85 && s % 2 === 1))) hat(when, 0.05 + 0.05 * I);
+}
+function musicTick() {
+  const ac = music.ac;
+  if (!ac || !music.on || ac.state !== 'running') return;
+  const calmNow = !!(scene.menu || scene.ended);
+  const target = calmNow ? 0 : 0.15 + 0.85 * Math.max(0, Math.min(1, scene.intensity ? scene.intensity() : 0));
+  music.I += (target - music.I) * 0.03;
+  if (music.next < ac.currentTime) music.next = ac.currentTime + 0.05;
+  while (music.next < ac.currentTime + 0.12) {
+    playStep(music.step++, music.next, calmNow);
+    music.next += 60 / (calmNow ? 84 : 100 + 50 * music.I) / 4;
+  }
+}
+function setMusic(on) {
+  music.on = on;
+  try { localStorage.setItem('nl-music', on ? 'on' : 'off'); } catch (e) {}
+  $('musicBtn').textContent = on ? '♪ On' : '♪ Off';
+  $('musicBtn').setAttribute('aria-pressed', on);
+  if (on) musicStart(); else if (music.ac) music.ac.suspend();
+}
+$('musicBtn').onclick = () => setMusic(!music.on);
+addEventListener('pointerdown', musicStart, true);
+addEventListener('keydown', musicStart, true);
+setMusic(music.on);
 
 /* ---------- input ---------- */
 function place(e) {
@@ -820,6 +909,7 @@ function frame(now) {
   if (W && scene) {
     for (let i = timers.length; i--;) { const tm = timers[i]; if ((tm.t -= dt) <= 0) { timers.splice(i, 1); tm.fn(); } }
     scene.update(dt);
+    musicTick();
     for (let i = arrows.length; i--;) {
       const a = arrows[i];
       if ((a.t += dt) >= a.T) { arrows.splice(i, 1); if (!scene.land(a.x, a.y) && a.y > HZ) stick(null, a.x, a.y); }
