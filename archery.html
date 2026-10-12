@@ -198,18 +198,18 @@ function refreshGold() {
 const SHOP = {
   arrow: [   // a: shaft, b: feathers
     { id: 'wood', name: 'Classic', a: C['wood-dark'], b: C.red, price: 0 },
-    { id: 'blue', name: 'Blue feather', a: C['wood-dark'], b: C.blue, price: 15 },
-    { id: 'night', name: 'Midnight', a: C.black, b: C.white, price: 30 },
-    { id: 'lime', name: 'Lime', a: '#2e7d32', b: '#b6e04a', price: 30 },
-    { id: 'pink', name: 'Bubblegum', a: '#c2378a', b: '#ffb3dd', price: 45 },
+    { id: 'blue', name: 'Blue feather', a: C['wood-dark'], b: C.blue, price: 50 },
+    { id: 'night', name: 'Midnight', a: C.black, b: C.white, price: 100 },
+    { id: 'lime', name: 'Lime', a: '#2e7d32', b: '#b6e04a', price: 100 },
+    { id: 'pink', name: 'Bubblegum', a: '#c2378a', b: '#ffb3dd', price: 150 },
     { id: 'golden', name: 'Golden Arrow', a: C.gold, b: C.white, earn: true }],
   target: [  // a and b alternate in bands; the classic face has no a and keeps the five ring colors
     { id: 'classic', name: 'Classic', price: 0 },
-    { id: 'red', name: 'Red and white', a: C.red, b: C.white, price: 20 },
-    { id: 'blue', name: 'Blue and white', a: C.blue, b: C.white, price: 20 },
-    { id: 'green', name: 'Green and white', a: '#2e8b46', b: C.white, price: 35 },
-    { id: 'purple', name: 'Purple and gold', a: '#6b3fa0', b: C.gold, price: 50 },
-    { id: 'night', name: 'Black and gold', a: C.black, b: C.gold, price: 60 }]
+    { id: 'red', name: 'Red and white', a: C.red, b: C.white, price: 75 },
+    { id: 'blue', name: 'Blue and white', a: C.blue, b: C.white, price: 75 },
+    { id: 'green', name: 'Green and white', a: '#2e8b46', b: C.white, price: 120 },
+    { id: 'purple', name: 'Purple and gold', a: '#6b3fa0', b: C.gold, price: 175 },
+    { id: 'night', name: 'Black and gold', a: C.black, b: C.gold, price: 250 }]
 };
 const save = { coins: 0, own: { arrow: ['wood'], target: ['classic'] }, eq: { arrow: 'wood', target: 'classic' } };
 try {
