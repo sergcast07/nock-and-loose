@@ -159,7 +159,7 @@ const ptr = { x: 0, y: 0, down: false, t0: 0, touch: false, seen: false };
 /* ---------- Golden Arrow: earned by reaching a goal in every round ---------- */
 const GOALS = [   // [best-score key, round, score to reach]
   ['rush', 'Classic', 30], ['bullseye30', 'Bullseyes, 30 sec', 3], ['bullseye60', 'Bullseyes, 60 sec', 6],
-  ['apple', 'Apple', 2], ['balloons', 'Balloons', 12]];
+  ['apple', 'Apple', 2], ['balloons', 'Balloons, 30 sec', 12]];
 const mem = {};   // keeps bests for this visit when browser storage is unavailable
 let golden = false;
 function bestOf(key) {
@@ -353,16 +353,16 @@ function Bullseyes(secs) {
   };
 }
 
-function Balloons() {
+function Balloons(secs) {
   // Same order as the rings on a target face: the nearer to gold, the smaller, faster and more valuable.
   const kinds = [
     { c: C.white, tc: C.ink, p: 1, k: 0.06, v: 0.17 }, { c: C.black, tc: C.white, p: 2, k: 0.054, v: 0.2 },
     { c: C.blue, tc: C.white, p: 3, k: 0.048, v: 0.24 }, { c: C.red, tc: C.white, p: 4, k: 0.042, v: 0.29 },
     { c: C.gold, tc: C.ink, p: 5, k: 0.035, v: 0.36 }];
-  let time = 30, score = 0, spawn = 0.3;
+  let time = secs, score = 0, spawn = 0.3;
   const bs = [];
   return {
-    name: 'Balloons', key: 'balloons', again: Balloons, parent: hub,
+    name: 'Balloons', key: secs === 30 ? 'balloons' : 'balloons60', again: () => Balloons(secs), parent: balloonMenu, backTo: 'Balloons',
     sub: 'White 1, black 2, blue 3, red 4, gold 5.',
     layout() {},
     ready() { return !this.ended; },
@@ -379,7 +379,7 @@ function Balloons() {
         b.y -= b.v * H * dt; b.r = b.k * U; b.x = b.fx * W + Math.sin(t * 1.5 + b.ph) * U * 0.02;
         if (b.y < -b.r * 3) bs.splice(i, 1);
       }
-      if (time <= 0) { time = 0; finish(score, 'points in 30 seconds'); }
+      if (time <= 0) { time = 0; finish(score, 'points in ' + secs + ' seconds'); }
     },
     draw() { bs.forEach(drawBalloon); },
     land(x, y) {
@@ -446,8 +446,10 @@ function Apple() {
 
 const bullMenu = () => Menu('Bullseyes', 'How long do you want on the clock?', [
   { label: '30 sec', make: () => Bullseyes(30) }, { label: '60 sec', make: () => Bullseyes(60) }], hub, 'Minigames');
+const balloonMenu = () => Menu('Balloons', 'How long do you want on the clock?', [
+  { label: '30 sec', make: () => Balloons(30) }, { label: '60 sec', make: () => Balloons(60) }], hub, 'Minigames');
 const hub = () => Menu('Minigames', 'Shoot one to play', [
-  { label: 'Bullseyes', make: bullMenu }, { label: 'Apple', make: Apple }, { label: 'Balloons', make: Balloons }], mainMenu, 'Range');
+  { label: 'Bullseyes', make: bullMenu }, { label: 'Apple', make: Apple }, { label: 'Balloons', make: balloonMenu }], mainMenu, 'Range');
 const mainMenu = () => Menu('Nock & Loose', 'Hold to draw, release to loose. Shoot a target to choose.', [
   { label: 'Minigames', tint: 'red', make: hub }, { label: 'Classic', tint: 'blue', make: Rush }], null);
 
