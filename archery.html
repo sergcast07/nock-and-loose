@@ -300,6 +300,13 @@ function windText() {
 }
 
 /* ---------- scenes ---------- */
+// Streak bonus: from the 5th hit in a row, every hit scores double until you miss.
+function bonus(n) {
+  if (n === 5) pop(W / 2, H * 0.3, 'Streak! Double points', C.gold);
+  return n >= 5 ? 2 : 1;
+}
+const streakText = n => n + (n >= 5 ? ' \u00d72' : '');
+
 function Menu(title, sub, opts, parent, backTo) {
   const hit = (x, y) => opts.findIndex(o => Math.hypot(x - o.x, y - o.y) < o.r);
   return {
@@ -349,7 +356,7 @@ function Menu(title, sub, opts, parent, backTo) {
 // Classic: a flat-out sprint down the range while targets rush past on both sides.
 function Rush() {
   const ts = [];
-  let score = 0, away = 0, spawn = 0.6, run = 0, dist = 0, sp = 1;
+  let score = 0, away = 0, spawn = 0.6, run = 0, dist = 0, sp = 1, streak = 0;
   const drop = () => (H - HZ) * 1.15;
   function place(tg) {
     const s = 1 / tg.d;
@@ -374,7 +381,7 @@ function Rush() {
         const tg = ts[i];
         tg.d -= sp * dt * 3.2; place(tg);
         if (tg.d < 0.9) {
-          ts.splice(i, 1); away++;
+          ts.splice(i, 1); away++; streak = 0;
           pop(Math.max(70, Math.min(W - 70, tg.x)), H * 0.8, 'Got away', C.white);
           if (away >= 5) { finish(score, 'points before 5 got away'); break; }
         }
@@ -397,15 +404,17 @@ function Rush() {
       for (const tg of ts.slice().sort((a, b) => a.d - b.d)) {
         const s = ringScore(tg, x, y);
         if (!s.v) continue;
-        score += s.v;
-        pop(tg.x, tg.y - tg.r * 0.5, '+' + s.v, s.v >= 9 ? C.gold : C.white);
+        const pts = s.v * bonus(++streak);
+        score += pts;
+        pop(tg.x, tg.y - tg.r * 0.5, '+' + pts, pts >= 9 ? C.gold : C.white);
         for (let j = 0; j < 12; j++) { const a = rand() * TAU, v = U * (0.2 + rand() * 0.35); parts.push({ x: tg.x, y: tg.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, c: RINGS[(j * 3) % 10] }); }
         ts.splice(ts.indexOf(tg), 1);
-        break;
+        return true;
       }
+      streak = 0;   // the arrow hit nothing
       return true;
     },
-    stat() { return [['Speed', Math.round(sp * 30) + ' km/h'], ['Away', away + '/5'], ['Score', score]]; }
+    stat() { return [['Speed', Math.round(sp * 30) + ' km/h'], ['Away', away + '/5'], ['Streak', streakText(streak)], ['Score', score]]; }
   };
 }
 
@@ -448,7 +457,7 @@ function Balloons(secs) {
     { c: C.white, tc: C.ink, p: 1, k: 0.06, v: 0.17 }, { c: C.black, tc: C.white, p: 2, k: 0.054, v: 0.2 },
     { c: C.blue, tc: C.white, p: 3, k: 0.048, v: 0.24 }, { c: C.red, tc: C.white, p: 4, k: 0.042, v: 0.29 },
     { c: C.gold, tc: C.ink, p: 5, k: 0.035, v: 0.36 }];
-  let time = secs, score = 0, spawn = 0.3;
+  let time = secs, score = 0, spawn = 0.3, streak = 0;
   const bs = [];
   return {
     name: 'Balloons', key: secs === 30 ? 'balloons' : 'balloons60', coin: s => Math.round(s * 0.6), again: () => Balloons(secs), parent: balloonMenu, backTo: 'Balloons',
@@ -474,14 +483,15 @@ function Balloons(secs) {
     land(x, y) {
       if (this.ended) return false;
       const i = bs.findIndex(b => Math.hypot(x - b.x, y - b.y) < b.r * 1.15);
-      if (i < 0) return false;
+      if (i < 0) { streak = 0; return false; }
       const b = bs.splice(i, 1)[0];
-      score += b.p;
-      pop(b.x, b.y, '+' + b.p, b.c);
+      const pts = b.p * bonus(++streak);
+      score += pts;
+      pop(b.x, b.y, '+' + pts, b.c);
       for (let j = 0; j < 10; j++) { const a = rand() * TAU, v = U * (0.2 + rand() * 0.3); parts.push({ x: b.x, y: b.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, c: b.c }); }
       return true;
     },
-    stat() { return [['Time', Math.ceil(time) + ' s'], ['Score', score]]; }
+    stat() { return [['Time', Math.ceil(time) + ' s'], ['Streak', streakText(streak)], ['Score', score]]; }
   };
 }
 
