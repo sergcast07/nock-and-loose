@@ -58,7 +58,7 @@ canvas:focus-visible, button:focus-visible { outline: 3px solid var(--gold); }
   padding-inline: 12px;
 }
 .banner h1 {
-  margin: 0; font: 400 clamp(26px, min(5.5vw, 8vh), 50px)/1.05 var(--display);
+  margin: 0; font: 400 clamp(26px, min(5.5vw, 7vh), 50px)/1.05 var(--display);
   color: var(--white); text-wrap: balance;
   text-shadow: 0 3px 0 var(--wood-dark), 0 6px 14px rgba(34, 38, 43, .25);
 }
@@ -304,7 +304,7 @@ function fire() {
   let x = a.x + wind * U * 0.07, y = a.y + (1 - p) * (1 - p) * U * 0.45;
   const s = scene.snap && scene.snap(x, y);
   if (s) { x = s.x; y = s.y; }
-  arrows.push({ x0: W / 2, y0: H + 10, x, y, t: 0, T: 0.34 });
+  arrows.push({ x0: W / 2, y0: H + 10, x, y, to: s || null, t: 0, T: 0.34 });
 }
 function stick(ref, x, y) {
   stuck.push(ref ? { ref, ox: (x - ref.x) / ref.r, oy: (y - ref.y) / ref.r } : { fx: x / W, fy: y / H });
@@ -340,7 +340,7 @@ function Menu(title, sub, opts, parent, backTo) {
     choose(i) {
       if (this.picked) return;
       this.picked = true;
-      arrows.push({ x0: W / 2, y0: H + 10, x: opts[i].x, y: opts[i].y, t: 0, T: 0.34 });
+      arrows.push({ x0: W / 2, y0: H + 10, x: opts[i].x, y: opts[i].y, to: opts[i], t: 0, T: 0.34 });
     },
     signPos() { return opts.map(o => ({ x: o.x, y: o.y - o.r - 14 })); },
     layout() {
@@ -348,14 +348,14 @@ function Menu(title, sub, opts, parent, backTo) {
       opts.forEach((o, i) => {
         o.r = n === 2 ? Math.min(W * 0.17, H * 0.16) : Math.min(W * (n === 3 ? 0.125 : 0.095), H * 0.15);
         o.x = W * (0.5 + (i - (n - 1) / 2) * span);
-        o.y = HZ - o.r * 0.75;
+        o.y = HZ - o.r * (n === 2 ? 0.6 : 0.75);
       });
       // The home range starts with an arrow already in each bullseye.
       if (!parent && !this.seeded) { this.seeded = true; opts.forEach(o => stick(o, o.x, o.y)); }
     },
     ready() { return !this.picked; },
     // Any shot that reaches a target is pulled into its bullseye.
-    snap(x, y) { const i = hit(x, y); return i < 0 ? null : { x: opts[i].x, y: opts[i].y }; },
+    snap(x, y) { const i = hit(x, y); return i < 0 ? null : opts[i]; },
     update() {},
     draw() { opts.forEach(o => drawTarget(o)); },
     land(x, y) {
@@ -956,6 +956,7 @@ function frame(now) {
     musicTick();
     for (let i = arrows.length; i--;) {
       const a = arrows[i];
+      if (a.to) { a.x = a.to.x; a.y = a.to.y; }   // stay locked on a menu target even if the window resizes mid-flight
       if ((a.t += dt) >= a.T) { arrows.splice(i, 1); if (!scene.land(a.x, a.y) && a.y > HZ) stick(null, a.x, a.y); }
     }
     pops = pops.filter(p => (p.t += dt) < 1);
