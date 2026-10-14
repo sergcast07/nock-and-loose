@@ -16,6 +16,8 @@
   --grass: #6fae4e; --grass-dark: #63a045; --tree: #2f5d3a;
   --gold: #f6cf2b; --red: #d8362b; --blue: #2f7fc2; --black: #22262b; --white: #f7f5ee;
   --straw: #d9b566; --wood: #8a5a33; --wood-dark: #5a371d;
+  --plank: #b67f4b; --plank-dark: #8f5f33; --pegboard: #efe0bd;
+  --stone: #30343b; --stone-dark: #23262c; --iron: #59606b; --brass: #d1a84f;
   --paper: #fbf7ea; --ink: #23281f; --page: #1c3325;
   --display: "Alfa Slab One", Rockwell, "Roboto Slab", Georgia, serif;
   --ui: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
@@ -48,7 +50,7 @@ canvas:focus-visible, button:focus-visible { outline: 3px solid var(--gold); }
 .hud button { pointer-events: auto; cursor: pointer; }
 .stats { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-left: auto; }
 .hud #gold { margin-left: auto; background: var(--gold); }
-#shopBtn:not([hidden]) + .stats { margin-left: 0; }
+#armoryBtn:not([hidden]) + .stats { margin-left: 0; }
 @media (max-width: 600px) { .wide { display: none; } }
 .stats span { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stats b { font-weight: 700; margin-left: 5px; }
@@ -105,11 +107,62 @@ canvas:focus-visible, button:focus-visible { outline: 3px solid var(--gold); }
 #rGoal:empty { display: none; }
 .result > div { max-height: 100%; overflow-y: auto; box-sizing: border-box; }
 .result li { align-items: center; }
-.result li.head { font-size: 14px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; border-top: 2px solid var(--ink); }
-.result li i { display: inline-block; width: 22px; height: 14px; margin-right: 8px; vertical-align: -2px; border: 1.5px solid var(--ink); border-radius: 2px; }
-.result button.mini { font-size: 14px; padding: 6px 9px; }
 .result button:disabled { opacity: .5; cursor: default; }
 #rCoins { font-weight: 700; }
+
+/* Rooms: the shop (awning, pegboard shelves, price tags) and the armory (stone wall, torchlight, racks). */
+.room { position: absolute; inset: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-bottom: 22px; }
+.room header {
+  position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 10px; padding: 12px 14px;
+}
+.room h2 { margin: 0; font: 400 clamp(19px, 4.4vw, 32px)/1 var(--display); text-wrap: balance; padding: 8px 14px; border-radius: 4px; }
+.room button {
+  font: 600 15px/1 var(--ui); letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
+  padding: 8px 11px; border-radius: 4px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink);
+}
+.room button.go { background: var(--gold); }
+.room button:disabled { opacity: .6; cursor: default; }
+.room .keeper { margin: 0 14px; font: 600 17px/1.3 var(--ui); align-self: flex-start; }
+.room section, .room footer { margin: 0 14px; }
+.room h3 { display: inline-block; margin: 0 0 8px; padding: 5px 9px; border-radius: 3px; font: 600 14px/1 var(--ui); letter-spacing: .1em; text-transform: uppercase; }
+.room #shelves, .room #racks { display: flex; flex-direction: column; gap: 18px; }
+.room ul { list-style: none; margin: 0; padding: 12px 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 12px 10px; }
+.room li { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 8px 6px; border-radius: 5px; text-align: center; color: var(--ink); }
+.room li b { font: 600 16px/1.15 var(--ui); }
+.room li svg { width: 100%; max-width: 128px; height: 56px; overflow: visible; filter: drop-shadow(0 2px 0 rgba(34, 38, 43, .3)); }
+.room li.target svg { max-width: 56px; }
+
+.store { background: repeating-linear-gradient(90deg, var(--plank) 0 78px, var(--plank-dark) 78px 80px); color: var(--ink); }
+.store header { background: repeating-linear-gradient(90deg, var(--red) 0 28px, var(--white) 28px 56px); border-bottom: 5px solid var(--wood-dark); box-shadow: 0 4px 0 rgba(34, 38, 43, .2); }
+.store h2 { background: var(--wood-dark); color: var(--white); }
+.purse { font: 700 16px/1 var(--ui); font-variant-numeric: tabular-nums; background: var(--gold); border: 2px solid var(--ink); border-radius: 999px; padding: 7px 13px; }
+.store .keeper { background: var(--paper); border: 2px solid var(--ink); border-radius: 12px 12px 12px 2px; padding: 8px 12px; }
+.store h3 { background: var(--black); color: var(--white); }
+.store ul {   /* a pegboard with a shelf plank along the bottom */
+  background: radial-gradient(circle, rgba(90, 55, 29, .3) 1.5px, transparent 2px) 0 0 / 16px 16px, var(--pegboard);
+  border-bottom: 10px solid var(--wood-dark); border-radius: 4px 4px 0 0; box-shadow: 0 6px 0 rgba(34, 38, 43, .22);
+}
+.store li.own { opacity: .6; }
+.tag {
+  position: relative; font: 700 15px/1 var(--ui); font-variant-numeric: tabular-nums; background: var(--paper);
+  border: 1.5px solid var(--ink); border-radius: 3px; padding: 4px 8px 4px 16px; transform: rotate(-3deg);
+}
+.tag::before { content: ""; position: absolute; left: 6px; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: var(--ink); }
+
+.armory {
+  color: var(--white); background-color: var(--stone);
+  background-image: radial-gradient(circle at 6% 0, rgba(255, 179, 71, .4), transparent 34%), radial-gradient(circle at 94% 0, rgba(255, 179, 71, .4), transparent 34%),
+    linear-gradient(var(--stone-dark) 2px, transparent 2px), linear-gradient(90deg, var(--stone-dark) 2px, transparent 2px);
+  background-size: auto, auto, 64px 32px, 64px 32px;
+}
+.armory header { background: var(--stone-dark); border-bottom: 4px solid var(--iron); }
+.armory h2 { color: var(--brass); padding-inline: 0; }
+.armory h3 { background: var(--iron); color: var(--white); }
+.armory ul { background: var(--plank); border-top: 8px solid var(--iron); border-radius: 3px; box-shadow: 0 6px 0 rgba(0, 0, 0, .3); }   /* a wooden rack on an iron rail */
+.armory li::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--stone-dark); }   /* the peg it hangs from */
+.armory li.on { background: rgba(251, 247, 234, .4); outline: 3px solid var(--brass); }
+.plaque { font: 700 13px/1 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); background: var(--brass); border: 1.5px solid var(--ink); border-radius: 2px; padding: 6px 9px; }
 </style>
 
 <div class="stage" id="stage">
@@ -119,6 +172,7 @@ canvas:focus-visible, button:focus-visible { outline: 3px solid var(--gold); }
     <button id="musicBtn" type="button" title="Music and sound effects">&#9834; On</button>
     <button id="gold" type="button">Golden Arrow</button>
     <button id="shopBtn" type="button">Shop</button>
+    <button id="armoryBtn" type="button" class="wide">Armory</button>
     <div class="stats" id="stats"></div>
   </div>
   <div class="banner">
@@ -126,17 +180,24 @@ canvas:focus-visible, button:focus-visible { outline: 3px solid var(--gold); }
     <p id="sub"></p>
   </div>
   <div id="signs"></div>
-  <div class="result" id="shop" hidden>
-    <div>
-      <h2>Shop</h2>
-      <p id="purse"></p>
-      <nav>
-        <button id="tabShop" type="button">Shop</button>
-        <button id="tabGear" type="button">My gear</button>
-      </nav>
-      <ul id="items"></ul>
-      <nav><button id="shopClose" type="button">Close</button></nav>
-    </div>
+  <div class="room store" id="shop" hidden>
+    <header>
+      <button type="button" data-room="">&larr; Leave</button>
+      <h2>The Fletcher's Shop</h2>
+      <span class="purse" id="purse"></span>
+    </header>
+    <p class="keeper" id="keeper"></p>
+    <div id="shelves"></div>
+    <footer><button type="button" data-room="armory">Through the door to your armory &rarr;</button></footer>
+  </div>
+  <div class="room armory" id="armory" hidden>
+    <header>
+      <button type="button" data-room="">&larr; Leave</button>
+      <h2>Your Armory</h2>
+      <button type="button" data-room="shop">To the shop &rarr;</button>
+    </header>
+    <p class="keeper">Everything you own hangs here. Choose what to carry out to the range.</p>
+    <div id="racks"></div>
   </div>
   <div class="result" id="trophy" hidden>
     <div>
@@ -195,7 +256,7 @@ function refreshGold() {
   const done = GOALS.filter(met).length;
   golden = done === GOALS.length;
   $('gold').innerHTML = '<span class="wide">Golden Arrow </span>★ ' + (golden ? 'earned' : done + '/' + GOALS.length);
-  $('goalState').textContent = golden ? 'Earned. The Golden Arrow and Golden Bow are yours to equip in My gear.'
+  $('goalState').textContent = golden ? 'Earned. The Golden Arrow and Golden Bow hang in your armory.'
     : 'Reach all ' + GOALS.length + ' goals to earn the Golden Arrow and the Golden Bow. No coins can buy them.';
   $('goals').innerHTML = GOALS.map(g => {
     const b = bestOf(g[0]), ok = met(g);
@@ -252,39 +313,78 @@ function store() { try { localStorage.setItem('nl-save', JSON.stringify(save)); 
 function owns(kind, it) { return it.earn ? golden : save.own[kind].includes(it.id); }
 function gear(kind) { return SHOP[kind].find(it => it.id === save.eq[kind] && owns(kind, it)) || SHOP[kind][0]; }
 
-let shopTab = 'shop';
+/* The shop and the armory are two rooms: you buy off the shelves in one and pick your loadout from the racks in the other. */
+function preview(kind, it) {   // a small drawing of the item for a shelf or rack
+  if (kind === 'bow') {
+    let h = '<svg viewBox="0 0 120 60" aria-hidden="true"' + (it.glow ? ' style="filter:drop-shadow(0 0 4px ' + it.a + ')"' : '') + '>';
+    h += '<path d="M12 46 L108 46" stroke="' + (it.s || C.white) + '" stroke-width="1.2"/>';
+    h += '<path d="M12 46 Q60 -8 108 46" fill="none" stroke="' + it.a + '" stroke-width="5" stroke-linecap="round"/>';
+    if (it.dash) h += '<path d="M12 46 Q60 -8 108 46" fill="none" stroke="' + it.b + '" stroke-width="5" stroke-dasharray="7 9"/>';
+    if (it.curl) h += '<path d="M12 46 L4 36 M108 46 L116 36" stroke="' + it.a + '" stroke-width="5" stroke-linecap="round"/>';
+    if (it.spikes) [[30, 29], [44, 22], [76, 22], [90, 29]].forEach(([x, y]) => { h += '<path d="M' + (x - 4) + ' ' + y + ' L' + x + ' ' + (y - 10) + ' L' + (x + 4) + ' ' + y + ' Z" fill="' + it.b + '"/>'; });
+    if (it.cams) h += '<circle cx="12" cy="46" r="6" fill="' + it.b + '" stroke="' + it.a + '" stroke-width="2"/><circle cx="108" cy="46" r="6" fill="' + it.b + '" stroke="' + it.a + '" stroke-width="2"/>';
+    return h + '<path d="M51 19.5 L69 19.5" stroke="' + it.b + '" stroke-width="8" stroke-linecap="round"/></svg>';
+  }
+  if (kind === 'arrow') {
+    let h = '<svg viewBox="0 0 120 30" aria-hidden="true">';
+    (TRAIL[it.fx] || []).forEach((c, i) => { h += '<circle cx="' + (34 + i * 13) + '" cy="' + (i % 2 ? 5 : 25) + '" r="2.6" fill="' + c + '"/>'; });
+    h += '<path d="M14 15 L106 15" stroke="' + it.a + '" stroke-width="3" stroke-linecap="round"/>';
+    h += '<path d="M14 15 L36 15" stroke="' + it.b + '" stroke-width="8" stroke-linecap="round"/>';
+    h += it.fx === 'plunger' ? '<circle cx="108" cy="15" r="7" fill="' + it.b + '"/>' : '<path d="M104 9 L118 15 L104 21 Z" fill="' + it.a + '"/>';
+    return h + '</svg>';
+  }
+  const cols = it.a ? [it.a, it.b, it.a, it.b, it.a] : [C.white, C.black, C.blue, C.red, C.gold];
+  return '<svg viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="30" fill="' + C.straw + '"/>' +
+    cols.map((c, i) => '<circle cx="30" cy="30" r="' + (27.5 - i * 5.5) + '" fill="' + c + '" stroke="rgba(34,38,43,.35)" stroke-width=".6"/>').join('') + '</svg>';
+}
+const ROOMS = [['bow', 'Bows', 'Bow rack'], ['arrow', 'Arrows', 'Quiver'], ['target', 'Targets', 'Target faces']];
+let keeperSays = '';
 function refreshShop() {
   $('shopBtn').innerHTML = 'Shop · ' + save.coins + '<span class="wide"> coins</span>';
-  $('purse').textContent = 'You have ' + save.coins + (save.coins === 1 ? ' coin' : ' coins') + '. Finish any round to earn more.';
-  $('tabShop').className = shopTab === 'shop' ? 'go' : '';
-  $('tabGear').className = shopTab === 'gear' ? 'go' : '';
-  let h = '';
-  [['bow', 'Bows'], ['arrow', 'Arrows'], ['target', 'Targets']].forEach(([kind, title]) => {
-    const rows = SHOP[kind].filter(it => owns(kind, it) === (shopTab === 'gear')).map(it => {
-      const data = ' data-kind="' + kind + '" data-id="' + it.id + '"';
-      let btn;
-      if (shopTab === 'gear') { const on = gear(kind) === it; btn = '<button class="mini" type="button"' + data + (on ? ' disabled' : '') + '>' + (on ? 'Equipped' : 'Equip') + '</button>'; }
-      else if (it.earn) btn = '<button class="mini" type="button" disabled>Earn it</button>';
-      else btn = '<button class="mini" type="button"' + data + (save.coins < it.price ? ' disabled' : '') + '>Buy · ' + it.price + '</button>';
-      return '<li><span><i style="background:linear-gradient(90deg,' + (it.a || C.gold) + ' 50%,' + (it.b || C.red) + ' 50%)"></i>' + it.name + '</span>' + btn + '</li>';
-    });
-    h += '<li class="head">' + title + '</li>' + (rows.join('') || '<li>' + (shopTab === 'gear' ? 'Nothing yet' : 'You own them all') + '</li>');
-  });
-  $('items').innerHTML = h;
+  $('purse').textContent = save.coins + (save.coins === 1 ? ' coin' : ' coins');
+  $('keeper').textContent = keeperSays || 'Welcome in! Finish any round on the range to earn coins.';
+  $('shelves').innerHTML = ROOMS.map(([kind, title]) => '<section><h3>' + title + '</h3><ul>' +
+    SHOP[kind].filter(it => it.price !== 0).map(it => {
+      const own = owns(kind, it), short = it.price - save.coins;
+      const btn = own ? '<button type="button" disabled>Sold</button>'
+        : it.earn ? '<button type="button" disabled>Earn it</button>'
+        : short > 0 ? '<button type="button" disabled>Need ' + short + ' more</button>'
+        : '<button type="button" class="go" data-kind="' + kind + '" data-id="' + it.id + '">Buy</button>';
+      return '<li class="' + kind + (own ? ' own' : '') + '">' + preview(kind, it) + '<b>' + it.name + '</b><span class="tag">' +
+        (own ? 'Yours' : it.earn ? 'Not for sale' : it.price + ' coins') + '</span>' + btn + '</li>';
+    }).join('') + '</ul></section>').join('');
+  $('racks').innerHTML = ROOMS.map(([kind, , title]) => '<section><h3>' + title + '</h3><ul>' +
+    SHOP[kind].filter(it => owns(kind, it)).map(it => {
+      const on = gear(kind) === it;
+      return '<li class="' + kind + (on ? ' on' : '') + '">' + preview(kind, it) + '<b>' + it.name + '</b>' +
+        (on ? '<span class="plaque">Equipped</span>' : '<button type="button" data-kind="' + kind + '" data-id="' + it.id + '">Equip</button>') + '</li>';
+    }).join('') + '</ul></section>').join('');
 }
-$('items').onclick = e => {
+function picked(e) {
   const b = e.target.closest('button[data-id]');
-  if (!b) return;
-  const kind = b.dataset.kind, it = SHOP[kind].find(i => i.id === b.dataset.id);
-  if (owns(kind, it)) save.eq[kind] = it.id;
-  else if (save.coins >= it.price) { save.coins -= it.price; save.own[kind].push(it.id); }
-  else return;
-  store(); refreshShop();
+  return b ? [b.dataset.kind, SHOP[b.dataset.kind].find(i => i.id === b.dataset.id)] : [];
+}
+$('shelves').onclick = e => {
+  const [kind, it] = picked(e);
+  if (!it || owns(kind, it) || save.coins < it.price) return;
+  save.coins -= it.price; save.own[kind].push(it.id);
+  keeperSays = 'Sold! Your ' + it.name + ' is hanging in the armory.';
+  sfx('coin'); store(); refreshShop();
 };
-$('shopBtn').onclick = () => { ptr.down = false; refreshShop(); $('shop').hidden = false; $('shopClose').focus(); };
-$('shopClose').onclick = () => { $('shop').hidden = true; $('shopBtn').focus(); };
-$('tabShop').onclick = () => { shopTab = 'shop'; refreshShop(); };
-$('tabGear').onclick = () => { shopTab = 'gear'; refreshShop(); };
+$('racks').onclick = e => {
+  const [kind, it] = picked(e);
+  if (!it || !owns(kind, it)) return;
+  save.eq[kind] = it.id;
+  sfx('thud'); store(); refreshShop();
+};
+function room(id) {   // 'shop', 'armory', or '' to step back out to the range
+  ptr.down = false; keeperSays = ''; refreshShop();
+  $('shop').hidden = id !== 'shop'; $('armory').hidden = id !== 'armory';
+  if (id) { $(id).scrollTop = 0; $(id).querySelector('button').focus(); }
+}
+$('shopBtn').onclick = () => room('shop');
+$('armoryBtn').onclick = () => room('armory');
+document.querySelectorAll('[data-room]').forEach(b => { b.onclick = () => room(b.dataset.room); });
 
 /* ---------- shooting ---------- */
 function aim() {
@@ -671,7 +771,7 @@ function go(s) {
   scene = s; arrows = []; stuck = []; pops = []; parts = []; timers = []; ptr.down = false; wind = 0;
   $('result').hidden = true;
   $('h1').hidden = !s.menu; $('h1').textContent = s.name; $('sub').textContent = s.sub;
-  $('back').hidden = !s.parent; $('gold').hidden = $('shopBtn').hidden = !s.menu; $('trophy').hidden = $('shop').hidden = true;
+  $('back').hidden = !s.parent; $('gold').hidden = $('shopBtn').hidden = $('armoryBtn').hidden = !s.menu; $('trophy').hidden = $('shop').hidden = $('armory').hidden = true;
   $('back').textContent = '← ' + (s.backTo || 'Minigames');
   const box = $('signs'); box.textContent = ''; box.className = s.signs && s.signs.length > 3 ? 'many' : '';
   (s.signs || []).forEach((label, i) => {
@@ -708,7 +808,7 @@ function finish(score, note) {
     store(); refreshShop();
     const goal = GOALS.find(g => g[0] === s.key);
     $('rCoins').textContent = '+' + earned + (earned === 1 ? ' coin' : ' coins');
-    $('rGoal').textContent = golden && !was ? 'Golden Arrow and Golden Bow earned! Both are equipped, and they live in My gear.'
+    $('rGoal').textContent = golden && !was ? 'Golden Arrow and Golden Bow earned! Both are equipped, and they hang in your armory.'
       : goal ? 'Golden Arrow goal: ' + goal[2] + (goal[3] ? ' or fewer' : '') + (met(goal) ? ' (reached)' : '') : '';
     $('rName').textContent = s.name; $('rScore').textContent = score; $('rNote').textContent = note;
     $('rBest').textContent = fresh ? 'New personal best' : 'Personal best ' + best;
@@ -792,6 +892,7 @@ function sfx(name) {   // sound effects share the music's output, so the same bu
   if (name === 'shoot') { blip('triangle', 260, 90, 0.16, 0.35); hiss('bandpass', 1800, 0.18, 0.14); }      // string twang and whoosh
   else if (name === 'hit') { blip('sine', 150, 55, 0.14, 0.7); hiss('lowpass', 900, 0.05, 0.3); }            // thunk into the target
   else if (name === 'pop') { hiss('highpass', 2500, 0.09, 0.5); blip('square', 500, 120, 0.06, 0.12); }      // balloon
+  else if (name === 'coin') blip('triangle', 990, 1480, 0.12, 0.3);
   else if (name === 'thud') blip('sine', 90, 50, 0.1, 0.3);                                                   // arrow in the grass
 }
 function musicTick() {
